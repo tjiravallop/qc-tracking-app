@@ -2,7 +2,8 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- บังคับการแสดงผลให้เป็นแบบแอปมือถือ 100% -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>QC Tracking</title>
     
     <!-- PWA Setup -->
@@ -41,27 +42,32 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; transition: background-color 0.3s; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; transition: background-color 0.3s; overscroll-behavior-y: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
-        .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 4px; cursor: col-resize; user-select: none; z-index: 10; }
+        .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 6px; cursor: col-resize; user-select: none; z-index: 10; }
         .resizer:hover { background: #3b82f6; }
-        .glass-morphism { backdrop-filter: blur(12px); background-color: rgba(255, 255, 255, 0.8); }
-        .dark .glass-morphism { background-color: rgba(15, 23, 42, 0.8); }
+        .glass-morphism { backdrop-filter: blur(12px); background-color: rgba(255, 255, 255, 0.85); }
+        .dark .glass-morphism { background-color: rgba(15, 23, 42, 0.85); }
         .column-drag-target { border-left: 3px solid #3b82f6 !important; background-color: rgba(59, 130, 246, 0.05); }
         .fade-up { animation: fadeUp 0.4s ease-out forwards; }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* รองรับการแสดงผล 100vh บนมือถือแบบไม่เพี้ยน */
+        .h-dvh { height: 100dvh; }
+        /* ซ่อน Scrollbar แนวแกน X ให้ดูคลีนบนมือถือ */
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-[#f8fafc] dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 overflow-hidden text-sm">
-    <div id="root" class="h-screen w-screen"></div>
+    <div id="root" class="h-dvh w-screen"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
         // =============================================================
-        // 1. TOOLBOX & CONSTANTS
+        // 1. TOOLBOX (Constants, Icons, Helpers)
         // =============================================================
         const USER_PINS = { "2098": "Thanachot J.", "0843": "Sangdao T.", "2149": "Vinit R.", "9999": "Admin" };
         const emptyForm = { year: '', inputDate: '', refNo: '', type: '', description: '', assignment: '', documentRevised: '', effectiveDate: '', dueTarget: '', completedDate: '', owner: '', status: 'On progress', remark: '' };
@@ -71,27 +77,28 @@
             { id: 'status', label: 'Status', width: 140 },
             { id: 'refNo', label: 'Ref No.', width: 130 },
             { id: 'type', label: 'Type', width: 100 },
-            { id: 'description', label: 'Description', width: 300 },
-            { id: 'assignment', label: 'Assignment', width: 300 },
+            { id: 'description', label: 'Description', width: 250 },
+            { id: 'assignment', label: 'Assignment', width: 250 },
             { id: 'dueTarget', label: 'Due Date', width: 130 },
             { id: 'completedDate', label: 'Completed Date', width: 130 },
             { id: 'owner', label: 'Owner', width: 160 },
             { id: 'year', label: 'Year', width: 80 },
-            { id: 'remark', label: 'Remark', width: 250 }
+            { id: 'remark', label: 'Remark', width: 200 }
         ];
 
         const Icons = {
-            Dashboard: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>,
-            Tasks: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" /></svg>,
-            Activity: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+            Dashboard: () => <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>,
+            Tasks: () => <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" /></svg>,
+            Activity: () => <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+            User: () => <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
             Logout: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" /></svg>,
             Theme: (dark) => dark ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3" /></svg> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>,
             Edit: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M9 11l3 3L22 4" /></svg>,
             Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>,
-            Plus: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v12M6 12h12" /></svg>,
+            Plus: () => <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v12M6 12h12" /></svg>,
             Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
             Download: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
-            Upload: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4" /></svg>,
+            Upload: () => <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4" /></svg>,
             Save: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>,
             X: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>,
             View: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
@@ -111,7 +118,6 @@
             return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800';
         };
 
-        // วิเคราะห์ความแตกต่างของการแก้ไขข้อมูล เพื่อบันทึก History แบบเจาะลึก
         const getChangesDetail = (oldData, newData) => {
             const changes = [];
             const fieldsToWatch = { 
@@ -123,8 +129,8 @@
                 const oldV = String(oldData[key] || '').trim();
                 const newV = String(newData[key] || '').trim();
                 if(oldV !== newV) {
-                    const shortOld = oldV.length > 30 ? oldV.substring(0, 30) + '...' : oldV;
-                    const shortNew = newV.length > 30 ? newV.substring(0, 30) + '...' : newV;
+                    const shortOld = oldV.length > 20 ? oldV.substring(0, 20) + '...' : oldV;
+                    const shortNew = newV.length > 20 ? newV.substring(0, 20) + '...' : newV;
                     changes.push(`${fieldsToWatch[key]}: '${shortOld}' ➔ '${shortNew}'`);
                 }
             }
@@ -156,15 +162,15 @@
         // 3. UI SUB-COMPONENTS
         // =============================================================
         const IconLoader = () => (
-            <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 flex-col">
+            <div className="h-dvh flex items-center justify-center bg-slate-50 dark:bg-slate-900 flex-col px-4 text-center">
                 <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                <p className="text-xs font-black uppercase text-slate-400 tracking-widest animate-pulse tracking-tighter">Syncing Infrastructure...</p>
+                <p className="text-xs font-black uppercase text-slate-400 tracking-widest animate-pulse tracking-tighter">Connecting Infrastructure...</p>
             </div>
         );
 
         const EmptyState = ({ text }) => (
-            <div className="flex flex-col items-center justify-center p-20 text-center">
-                <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-300 dark:text-slate-600 mb-4 animate-bounce"><Icons.Tasks /></div>
+            <div className="flex flex-col items-center justify-center p-10 md:p-20 text-center">
+                <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-300 dark:text-slate-600 mb-4 animate-bounce"><Icons.Tasks /></div>
                 <h4 className="text-slate-400 font-bold uppercase tracking-widest text-xs">{text || 'Infrastructure Ready'}</h4>
             </div>
         );
@@ -188,7 +194,7 @@
                                 font: { weight: 'bold', size: 10 },
                                 display: (context) => context.dataset.data[context.dataIndex] > 0
                             },
-                            tooltip: { backgroundColor: isDark ? '#1e293b' : '#fff', titleColor: isDark ? '#fff' : '#000', borderColor: isDark ? '#334155' : '#e2e8f0', borderWidth: 1 }
+                            tooltip: { backgroundColor: isDark ? '#1e293b' : '#fff', titleColor: isDark ? '#fff' : '#000', bodyColor: isDark ? '#94a3b8' : '#475569', borderColor: isDark ? '#334155' : '#e2e8f0', borderWidth: 1 }
                         }
                     }
                 });
@@ -207,106 +213,83 @@
 
             const pieData = {
                 labels: ['Completed', 'Overdue', 'In Progress'],
-                datasets: [{ data: [stats.done, stats.overdue, stats.total - stats.done - stats.overdue], backgroundColor: ['#22c55e', '#f43f5e', '#3b82f6'], borderWidth: 0, hoverOffset: 12 }]
+                datasets: [{ data: [stats.done, stats.overdue, stats.total - stats.done - stats.overdue], backgroundColor: ['#22c55e', '#f43f5e', '#3b82f6'], borderWidth: 0, hoverOffset: 8 }]
             };
 
-            const yearCounts = tasks.reduce((acc, t) => { if(t.year) acc[t.year] = (acc[t.year] || 0) + 1; return acc; }, {});
-            const sortedYears = Object.keys(yearCounts).sort();
-            const barData = {
-                labels: sortedYears,
-                datasets: [{ label: 'Projects', data: sortedYears.map(y => yearCounts[y]), backgroundColor: '#6366f1', borderRadius: 8 }]
-            };
-
-            // Chart 3: Pending Tasks by Due Date (แสดงงานค้างตามเดือนของ Due Date)
-            const dueData = useMemo(() => {
-                const pendingByDue = tasks.filter(t => t.status?.toLowerCase() !== 'completed' && t.dueTarget).reduce((acc, t) => {
-                    const month = String(t.dueTarget).substring(0, 7); // YYYY-MM
-                    if (month && month.length === 7) {
-                        acc[month] = (acc[month] || 0) + 1;
+            const yearData = useMemo(() => {
+                const counts = {};
+                tasks.forEach(t => {
+                    if(t.year) {
+                        if(!counts[t.year]) counts[t.year] = { comp: 0, pend: 0 };
+                        if(t.status?.toLowerCase() === 'completed') counts[t.year].comp++;
+                        else counts[t.year].pend++;
                     }
-                    return acc;
-                }, {});
-                
-                const sortedDueMonths = Object.keys(pendingByDue).sort();
-                
-                // แปลง YYYY-MM เป็นชื่อเดือนให้อ่านง่ายขึ้น (เช่น Jan 2026)
-                const formatMonth = (val) => {
-                    if (!val) return 'Unknown';
-                    const parts = val.split('-');
-                    if (parts.length < 2) return val;
-                    const y = parts[0];
-                    const m = parseInt(parts[1], 10);
-                    const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                    return `${mNames[m - 1]} ${y}`;
-                };
-
-                return {
-                    labels: sortedDueMonths.map(formatMonth),
-                    datasets: [{ 
-                        label: 'Pending Tasks', 
-                        data: sortedDueMonths.map(m => pendingByDue[m]), 
-                        backgroundColor: '#f43f5e', 
-                        borderRadius: 8 
-                    }]
-                };
+                });
+                const labels = Object.keys(counts).sort();
+                return { labels, datasets: [ { label: 'Completed', data: labels.map(l => counts[l].comp), backgroundColor: '#22c55e', borderRadius: 4 }, { label: 'Pending', data: labels.map(l => counts[l].pend), backgroundColor: '#3b82f6', borderRadius: 4 } ] };
             }, [tasks]);
 
-            // Chart 4: Monthly Completion Trend
+            const dueData = useMemo(() => {
+                const pendingByDue = tasks.filter(t => t.status?.toLowerCase() !== 'completed' && t.dueTarget).reduce((acc, t) => {
+                    const month = String(t.dueTarget).substring(0, 7);
+                    if (month && month.length === 7) acc[month] = (acc[month] || 0) + 1;
+                    return acc;
+                }, {});
+                const sortedDueMonths = Object.keys(pendingByDue).sort();
+                const formatMonth = (val) => {
+                    if (!val) return 'Unknown'; const parts = val.split('-'); if (parts.length < 2) return val;
+                    return `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1], 10) - 1]} ${parts[0]}`;
+                };
+                return { labels: sortedDueMonths.map(formatMonth), datasets: [{ label: 'Pending Tasks', data: sortedDueMonths.map(m => pendingByDue[m]), backgroundColor: '#f43f5e', borderRadius: 6 }] };
+            }, [tasks]);
+
             const lineData = useMemo(() => {
                 const mCounts = tasks.filter(t => t.status?.toLowerCase() === 'completed' && t.completedDate).reduce((acc, t) => {
                     const month = t.completedDate.substring(0, 7);
-                    acc[month] = (acc[month] || 0) + 1;
+                    if (month && month.length === 7) acc[month] = (acc[month] || 0) + 1;
                     return acc;
                 }, {});
                 const sortedM = Object.keys(mCounts).sort().slice(-12);
-                
                 const formatMonth = (val) => {
-                    if (!val) return 'Unknown';
-                    const parts = val.split('-');
-                    if (parts.length < 2) return val;
-                    const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                    return `${mNames[parseInt(parts[1], 10) - 1]} ${parts[0]}`;
+                    if (!val) return 'Unknown'; const parts = val.split('-'); if (parts.length < 2) return val;
+                    return `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1], 10) - 1]} ${parts[0]}`;
                 };
-
-                return {
-                    labels: sortedM.map(formatMonth),
-                    datasets: [{ label: 'Completed', data: sortedM.map(m => mCounts[m]), borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', fill: true, tension: 0.3 }]
-                };
+                return { labels: sortedM.map(formatMonth), datasets: [{ label: 'Completed', data: sortedM.map(m => mCounts[m]), borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', fill: true, tension: 0.3 }] };
             }, [tasks]);
 
             return (
-                <div className="space-y-8 h-full overflow-y-auto custom-scrollbar pb-10 px-2 fade-up">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm">
+                <div className="space-y-6 md:space-y-8 h-full overflow-y-auto custom-scrollbar pb-24 md:pb-10 px-2 md:px-4 fade-up">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                         {[
-                            { label: 'System Health', val: `${stats.rate}%`, color: 'blue', icon: '🎯' },
-                            { label: 'Total Inventory', val: stats.total, color: 'indigo', icon: '📁' },
+                            { label: 'Health', val: `${stats.rate}%`, color: 'blue', icon: '🎯' },
+                            { label: 'Inventory', val: stats.total, color: 'indigo', icon: '📁' },
                             { label: 'Completed', val: stats.done, color: 'emerald', icon: '✅' },
-                            { label: 'Critical Overdue', val: stats.overdue, color: 'rose', icon: '🔥' },
+                            { label: 'Overdue', val: stats.overdue, color: 'rose', icon: '🔥' },
                         ].map((card, i) => (
-                            <div key={i} className="bg-white dark:bg-slate-800 p-8 rounded-[2rem] shadow-soft border border-slate-100 dark:border-slate-700 hover:shadow-premium transition-all">
-                                <div className="flex justify-between items-start mb-4">
-                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{card.label}</p>
-                                    <span className="text-2xl">{card.icon}</span>
+                            <div key={i} className="bg-white dark:bg-slate-800 p-5 md:p-8 rounded-[1.5rem] md:rounded-[2rem] shadow-soft border border-slate-100 dark:border-slate-700 hover:shadow-premium transition-all">
+                                <div className="flex justify-between items-start mb-2 md:mb-4">
+                                    <p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest">{card.label}</p>
+                                    <span className="text-lg md:text-2xl">{card.icon}</span>
                                 </div>
-                                <h3 className="text-4xl font-black dark:text-white tracking-tighter">{card.val}</h3>
+                                <h3 className="text-2xl md:text-4xl font-black dark:text-white tracking-tighter">{card.val}</h3>
                             </div>
                         ))}
                     </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <div className="bg-white dark:bg-slate-800 p-8 rounded-[3rem] shadow-soft border dark:border-slate-700 h-80 flex flex-col transition-colors">
-                            <h4 className="font-black text-xs uppercase tracking-widest text-slate-400 mb-6 italic">Status Distribution</h4>
-                            <div className="flex-1 min-h-0"><ChartComp type="doughnut" data={pieData} options={{ cutout: '78%', plugins: { legend: { position: 'right' } } }} isDark={isDark} /></div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-64 md:h-80 flex flex-col transition-colors">
+                            <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest text-slate-400 mb-4 md:mb-6 italic">Status Distribution</h4>
+                            <div className="flex-1 min-h-0"><ChartComp type="doughnut" data={pieData} options={{ cutout: '78%', plugins: { legend: { position: 'right', labels: { boxWidth: 10 } } } }} isDark={isDark} /></div>
                         </div>
-                        <div className="bg-white dark:bg-slate-800 p-8 rounded-[3rem] shadow-soft border dark:border-slate-700 h-80 flex flex-col transition-colors">
-                            <h4 className="font-black text-xs uppercase tracking-widest text-slate-400 mb-6 italic text-rose-500">Pending Tasks by Due Date</h4>
+                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-64 md:h-80 flex flex-col transition-colors">
+                            <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest text-slate-400 mb-4 md:mb-6 italic text-rose-500">Pending by Due Date</h4>
                             <div className="flex-1 min-h-0"><ChartComp type="bar" data={dueData} options={{ scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }} isDark={isDark} /></div>
                         </div>
-                        <div className="bg-white dark:bg-slate-800 p-8 rounded-[3rem] shadow-soft border dark:border-slate-700 h-80 flex flex-col transition-colors">
-                            <h4 className="font-black text-xs uppercase tracking-widest text-slate-400 mb-6 italic">Yearly Volume</h4>
-                            <div className="flex-1 min-h-0"><ChartComp type="bar" data={barData} options={{ scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }} isDark={isDark} /></div>
+                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-64 md:h-80 flex flex-col transition-colors">
+                            <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest text-slate-400 mb-4 md:mb-6 italic">Yearly Volume (Stacked)</h4>
+                            <div className="flex-1 min-h-0"><ChartComp type="bar" data={yearData} options={{ scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'top', labels:{ boxWidth:10 } } } }} isDark={isDark} /></div>
                         </div>
-                        <div className="bg-white dark:bg-slate-800 p-8 rounded-[3rem] shadow-soft border dark:border-slate-700 h-80 flex flex-col transition-colors">
-                            <h4 className="font-black text-xs uppercase tracking-widest text-slate-400 mb-6 italic text-emerald-500">Monthly Completion Trend</h4>
+                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-64 md:h-80 flex flex-col transition-colors">
+                            <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest text-slate-400 mb-4 md:mb-6 italic text-emerald-500">Monthly Completion Trend</h4>
                             <div className="flex-1 min-h-0"><ChartComp type="line" data={lineData} options={{ scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false }, datalabels: { align: 'top', color: isDark ? '#94a3b8' : '#64748b' } } }} isDark={isDark} /></div>
                         </div>
                     </div>
@@ -315,21 +298,21 @@
         };
 
         const ActivityView = ({ logs }) => (
-            <div className="bg-white dark:bg-slate-800 rounded-[3rem] shadow-soft border dark:border-slate-700 h-full flex flex-col p-10 fade-up transition-colors">
-                <h3 className="font-black text-2xl mb-8 flex items-center gap-4 dark:text-white uppercase tracking-tighter"><span className="w-1.5 h-6 bg-rose-500 rounded-full"></span> INTERACTION HISTORY</h3>
-                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-2">
+            <div className="bg-white dark:bg-slate-800 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-full flex flex-col p-6 md:p-10 fade-up transition-colors">
+                <h3 className="font-black text-lg md:text-2xl mb-6 md:mb-8 flex items-center gap-3 md:gap-4 dark:text-white uppercase tracking-tighter"><span className="w-1.5 h-5 md:h-6 bg-rose-500 rounded-full"></span> INTERACTION LOG</h3>
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-2 pb-20 md:pb-0">
                     {logs.length === 0 ? <EmptyState text="Historical records empty" /> : 
                         logs.map((log, i) => (
-                            <div key={i} className="flex items-start gap-6 p-6 rounded-[2.5rem] bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700/50 hover:border-blue-500 transition-all duration-300">
-                                <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-lg shadow-lg shadow-blue-600/20 shrink-0">{log.user?.charAt(0)}</div>
+                            <div key={i} className="flex items-start gap-4 md:gap-6 p-5 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700/50 hover:border-blue-500 transition-all duration-300">
+                                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-base md:text-lg shadow-lg shadow-blue-600/20 shrink-0">{log.user?.charAt(0)}</div>
                                 <div className="flex-1">
-                                    <p className="font-bold text-slate-800 dark:text-slate-200">{log.user} <span className="text-slate-400 font-medium mx-2 italic lowercase">{log.action}</span> <span className="text-blue-600 dark:text-blue-400 font-black tracking-tight">{log.target}</span></p>
+                                    <p className="font-bold text-sm md:text-base text-slate-800 dark:text-slate-200 leading-tight">{log.user} <span className="text-slate-400 font-medium mx-1 md:mx-2 italic lowercase text-xs md:text-sm">{log.action}</span> <span className="text-blue-600 dark:text-blue-400 font-black tracking-tight">{log.target}</span></p>
                                     {log.details && (
-                                        <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 inline-block font-medium">
+                                        <div className="mt-2 text-[10px] md:text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 md:p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 inline-block font-medium break-all">
                                             {log.details}
                                         </div>
                                     )}
-                                    <p className="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest opacity-60">{new Date(log.timestamp).toLocaleString()}</p>
+                                    <p className="text-[9px] md:text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest opacity-60">{new Date(log.timestamp).toLocaleString()}</p>
                                 </div>
                             </div>
                         ))
@@ -353,6 +336,9 @@
             const [loading, setLoading] = useState(true);
             const [isProcessing, setIsProcessing] = useState(false);
             
+            // Mobile Specific State
+            const [showMobileProfile, setShowMobileProfile] = useState(false);
+
             // Filters
             const [searchTerm, setSearchTerm] = useState('');
             const [filterYear, setFilterYear] = useState('All');
@@ -377,7 +363,7 @@
             
             // Import States
             const [importPreview, setImportPreview] = useState(null);
-            const [importMode, setImportMode] = useState('append'); // 'append' or 'overwrite'
+            const [importMode, setImportMode] = useState('append');
             const fileInputRef = useRef(null);
 
             // Auto Logout Setup (30 Mins)
@@ -414,9 +400,6 @@
                 return () => { unsubTasks(); unsubLogs(); }
             }, []);
 
-            // Reset import mode on new file
-            useEffect(() => { setImportMode('append'); }, [importPreview]);
-
             const logActivity = async (action, target, user, details = "") => {
                 if(!dbInst) return;
                 try { await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_activity").add({ action, target, user, details, timestamp: Date.now() }); } catch(e){}
@@ -432,7 +415,6 @@
                         const oldData = tasks.find(t => t.id === id) || {};
                         const details = getChangesDetail(oldData, data);
                         await coll.doc(id).update(rest);
-                        // ยึด Ref No. เก่าเป็นหลัก เพื่อให้รู้ว่าแก้ที่รายการไหน
                         logActivity("Revised", "Ref: " + (oldData.refNo || data.refNo || "Unknown"), activeUser, details);
                     } else {
                         data.createdAt = Date.now();
@@ -456,7 +438,6 @@
                     
                     if (details) {
                         const logRef = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_activity").doc();
-                        // ยึด Ref No. เก่าเป็นหลักในการบันทึก Log
                         batch.set(logRef, { action: "Quick Edited", target: "Ref: " + (oldData.refNo || newData.refNo || id), user: activeUser, details, timestamp: Date.now() });
                     }
                 });
@@ -468,8 +449,8 @@
                 const headers = initialColumns.filter(c => !hiddenCols.includes(c.id)).map(c => c.label).join(',');
                 const rows = filteredAndSortedTasks.map(t => {
                     return initialColumns.filter(c => !hiddenCols.includes(c.id)).map(c => {
-                        const val = String(t[c.id] || '').replace(/,/g, ' ').replace(/\n/g, ' ');
-                        return val;
+                        const val = String(t[c.id] || '').replace(/,/g, ' ').replace(/\n/g, ' ').replace(/\r/g, '');
+                        return `"${val}"`;
                     }).join(',');
                 }).join('\n');
                 const blob = new Blob(['\uFEFF' + headers + '\n' + rows], { type: 'text/csv;charset=utf-8;' });
@@ -482,33 +463,23 @@
             const toggleColVisibility = (id) => setHiddenCols(p => p.includes(id) ? p.filter(c => c !== id) : [...p, id]);
             const visibleColOrder = colOrder.filter(id => !hiddenCols.includes(id));
 
-            // Smooth Resizer Function
+            // Smooth Resizer
             const attachResizer = (e, colId) => {
                 e.preventDefault(); e.stopPropagation();
                 const th = e.target.closest('th');
                 const startX = e.pageX;
                 const startWidth = th.getBoundingClientRect().width;
-                
-                const onMouseMove = (moveEvent) => {
-                    const newWidth = Math.max(80, startWidth + (moveEvent.pageX - startX));
-                    th.style.width = `${newWidth}px`;
-                    th.style.minWidth = `${newWidth}px`;
+                const onMouseMove = (m) => {
+                    const newWidth = Math.max(60, startWidth + (m.pageX - startX));
+                    th.style.width = `${newWidth}px`; th.style.minWidth = `${newWidth}px`;
                 };
-                
                 const onMouseUp = () => {
-                    const finalWidth = th.getBoundingClientRect().width;
-                    setColWidths(p => { 
-                        const u = {...p, [colId]: finalWidth}; 
-                        localStorage.setItem('qc_col_widths_v11', JSON.stringify(u)); 
-                        return u; 
-                    });
-                    document.removeEventListener('mousemove', onMouseMove);
-                    document.removeEventListener('mouseup', onMouseUp);
-                    th.style.width = ''; th.style.minWidth = ''; // Let React state take over
+                    const fw = th.getBoundingClientRect().width;
+                    setColWidths(p => { const u = {...p, [colId]: fw}; localStorage.setItem('qc_col_widths_v11', JSON.stringify(u)); return u; });
+                    document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
+                    th.style.width = ''; th.style.minWidth = ''; 
                 };
-                
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('mouseup', onMouseUp);
+                document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
             };
 
             const filteredAndSortedTasks = useMemo(() => {
@@ -522,7 +493,6 @@
                     const isO = t.status?.toLowerCase() !== 'completed' && t.dueTarget && t.dueTarget < today;
                     const mOvr = !filterOverdue || isO;
                     
-                    // Month filter check (from dueTarget, completedDate or inputDate)
                     const tMo = filterMonth === 'All' || 
                         (t.dueTarget && t.dueTarget.substring(5,7) === filterMonth) || 
                         (t.completedDate && t.completedDate.substring(5,7) === filterMonth) || 
@@ -548,30 +518,29 @@
             const uniqueTypes = useMemo(() => [...new Set(tasks.map(t => t.type))].filter(Boolean).sort(), [tasks]);
             const monthList = [{v:'01',n:'Jan'}, {v:'02',n:'Feb'}, {v:'03',n:'Mar'}, {v:'04',n:'Apr'}, {v:'05',n:'May'}, {v:'06',n:'Jun'}, {v:'07',n:'Jul'}, {v:'08',n:'Aug'}, {v:'09',n:'Sep'}, {v:'10',n:'Oct'}, {v:'11',n:'Nov'}, {v:'12',n:'Dec'}];
 
-            // Import Checker
             const existingRefNos = useMemo(() => new Set(tasks.map(t => t.refNo).filter(Boolean)), [tasks]);
             const overlappingCount = importPreview ? importPreview.filter(r => r.refNo && existingRefNos.has(r.refNo)).length : 0;
 
             if (loading) return <IconLoader />;
 
             if (!activeUser) return (
-                <div className="h-screen w-full flex bg-[#f1f5f9] dark:bg-[#020617] transition-colors duration-500">
+                <div className="h-dvh w-full flex bg-[#f1f5f9] dark:bg-[#020617] transition-colors duration-500">
                     <div className="hidden lg:flex w-1/2 bg-blue-600 p-24 flex-col justify-between text-white relative overflow-hidden shadow-2xl">
-                        <div className="z-10"><h1 className="text-7xl font-black italic tracking-tighter uppercase">QC TRACKING</h1><p className="text-blue-100 opacity-60 text-xl mt-6">Secure Intelligence & Project Management.</p></div>
-                        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-400 rounded-full blur-[150px] opacity-20 -mr-48 -mt-48"></div>
+                        <div className="z-10"><h1 className="text-7xl font-black italic tracking-tighter uppercase">QC TRACKING</h1><p className="text-blue-100 opacity-60 text-xl mt-6">Professional Intelligence & Project Management.</p></div>
+                        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-400 rounded-full blur-[180px] opacity-20 -mr-64 -mt-64"></div>
                     </div>
-                    <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-                        <div className="bg-white dark:bg-slate-800 p-16 rounded-[4rem] shadow-premium w-full max-w-md border dark:border-slate-700 fade-up">
-                            <h2 className="text-2xl font-black dark:text-white text-center mb-10 uppercase tracking-widest tracking-tighter">Verify PIN</h2>
+                    <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-8">
+                        <div className="bg-white dark:bg-slate-800 p-10 md:p-16 rounded-[3rem] md:rounded-[4rem] shadow-premium w-full max-w-md border dark:border-slate-700 fade-up">
+                            <h2 className="text-xl md:text-2xl font-black dark:text-white text-center mb-8 md:mb-10 uppercase tracking-widest tracking-tighter">Verify PIN</h2>
                             <form onSubmit={e => { 
                                 e.preventDefault(); 
                                 if(USER_PINS[pinInput]) { 
                                     setActiveUser(USER_PINS[pinInput]); sessionStorage.setItem('qc_active_user', USER_PINS[pinInput]); setPinError('');
                                 } else { setPinError('รหัส PIN ไม่ถูกต้อง!'); } 
-                            }} className="space-y-8">
-                                <input type="password" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(''); }} placeholder="• • • •" className="w-full text-center text-6xl tracking-widest py-8 rounded-[2rem] dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 outline-none dark:text-white shadow-inner bg-slate-50 transition-all" maxLength={4} autoFocus />
-                                {pinError && <p className="text-rose-500 text-center font-bold text-sm animate-pulse">{pinError}</p>}
-                                <button className="w-full bg-blue-600 py-6 rounded-3xl text-white font-black shadow-xl hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-widest">AUTHENTICATE</button>
+                            }} className="space-y-6 md:space-y-8">
+                                <input type="password" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(''); }} placeholder="• • • •" className="w-full text-center text-4xl md:text-6xl tracking-widest py-6 md:py-8 rounded-[1.5rem] md:rounded-[2rem] dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 outline-none dark:text-white shadow-inner bg-slate-50 transition-all" maxLength={4} autoFocus />
+                                {pinError && <p className="text-rose-500 text-center font-bold text-xs md:text-sm animate-pulse">{pinError}</p>}
+                                <button className="w-full bg-blue-600 py-5 md:py-6 rounded-2xl md:rounded-3xl text-white font-black shadow-xl hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-widest text-xs md:text-sm">AUTHENTICATE</button>
                             </form>
                         </div>
                     </div>
@@ -579,15 +548,13 @@
             );
 
             return (
-                <div className="flex h-full w-full bg-[#f8fafc] dark:bg-[#0f172a] transition-colors duration-300" onClick={() => { if(showColMenu) setShowColMenu(false); }}>
-                    <aside className="w-64 bg-white dark:bg-[#0f172a] border-r dark:border-slate-800 flex flex-col z-50">
+                <div className="flex flex-col md:flex-row h-dvh w-full bg-[#f8fafc] dark:bg-[#0f172a] transition-colors duration-300" onClick={() => { if(showColMenu) setShowColMenu(false); if(showMobileProfile) setShowMobileProfile(false); }}>
+                    
+                    {/* DESKTOP SIDEBAR */}
+                    <aside className="hidden md:flex w-72 bg-white dark:bg-[#0f172a] border-r dark:border-slate-800 flex-col z-50">
                         <div className="p-8 font-black text-2xl italic text-blue-600 tracking-tighter uppercase">QC TRACKING</div>
                         <nav className="flex-1 px-4 space-y-2">
-                            {[
-                                { id: 'dashboard', label: 'Overview', icon: <Icons.Dashboard /> },
-                                { id: 'tasks', label: 'Projects', icon: <Icons.Tasks /> },
-                                { id: 'activity', label: 'History Log', icon: <Icons.Activity /> },
-                            ].map(item => (
+                            {[{ id: 'dashboard', label: 'Overview', icon: <Icons.Dashboard /> }, { id: 'tasks', label: 'Projects', icon: <Icons.Tasks /> }, { id: 'activity', label: 'History Log', icon: <Icons.Activity /> }].map(item => (
                                 <button key={item.id} onClick={() => setCurrentView(item.id)} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all duration-300 ${currentView === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/30' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                                     {item.icon} {item.label}
                                 </button>
@@ -604,13 +571,17 @@
                         </div>
                     </aside>
 
-                    <main className="flex-1 flex flex-col overflow-hidden relative">
-                        <header className="glass-morphism border-b dark:border-slate-800 z-40 px-8 py-5 transition-colors">
-                            <div className="flex items-center justify-between mb-4">
-                                <h1 className="text-2xl font-black dark:text-white capitalize tracking-tighter transition-colors">{currentView} Interface</h1>
-                                <div className="flex gap-3">
-                                    <button onClick={() => { setCurrentTask(emptyForm); setIsEditing(false); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 rounded-full font-black text-xs shadow-lg flex items-center gap-2 hover:scale-105 active:scale-95 transition-all"><Icons.Plus /> ADD TASK</button>
-                                    <button onClick={() => fileInputRef.current?.click()} className="p-3 bg-white dark:bg-slate-800 rounded-full border dark:border-slate-700 shadow-sm hover:bg-slate-50 transition-all dark:text-white" title="Import Excel"><Icons.Upload /></button>
+                    {/* MAIN CONTENT */}
+                    <main className="flex-1 flex flex-col overflow-hidden relative pb-16 md:pb-0">
+                        
+                        {/* HEADER & FILTERS */}
+                        <header className="glass-morphism border-b dark:border-slate-800 z-40 px-4 md:px-10 py-4 md:py-6 transition-colors">
+                            <div className="flex items-start md:items-center justify-between mb-4 flex-col md:flex-row gap-4">
+                                <h1 className="text-xl md:text-2xl font-black dark:text-white capitalize tracking-tighter">{currentView} Interface</h1>
+                                <div className="flex gap-2 w-full md:w-auto overflow-x-auto hide-scroll pb-1 md:pb-0 shrink-0">
+                                    <button onClick={() => { setCurrentTask(emptyForm); setIsEditing(false); setIsModalOpen(true); }} className="bg-blue-600 text-white px-5 md:px-8 py-2 md:py-3 rounded-full font-black text-[10px] md:text-xs shadow-lg flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shrink-0"><Icons.Plus /> ADD TASK</button>
+                                    <button onClick={() => fileInputRef.current?.click()} className="p-2 md:p-3 bg-white dark:bg-slate-800 rounded-full border dark:border-slate-700 shadow-sm hover:bg-slate-50 transition-all dark:text-white shrink-0"><Icons.Upload /></button>
+                                    <button onClick={handleExportCSV} className="flex md:hidden items-center gap-2 px-4 py-2 rounded-full text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 text-[10px] font-black shrink-0"><Icons.Download /> EXPORT</button>
                                     <input type="file" className="hidden" ref={fileInputRef} onChange={e => {
                                         const f = e.target.files[0]; if(!f) return;
                                         const r = new FileReader(); r.readAsArrayBuffer(f);
@@ -625,38 +596,36 @@
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-3 pt-3 border-t dark:border-slate-800 transition-colors">
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none transition-colors"><Icons.Search /></div>
-                                    <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Quick filter..." className="bg-slate-50 dark:bg-slate-900 py-2.5 pl-10 pr-4 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 w-48 dark:text-white transition-all shadow-inner border border-slate-100 dark:border-slate-700" />
+                            {/* Filters Bar (Scrollable horizontally on mobile) */}
+                            <div className="flex flex-nowrap md:flex-wrap items-center gap-2 md:gap-3 pt-3 border-t dark:border-slate-800 transition-colors overflow-x-auto hide-scroll pb-2">
+                                <div className="relative group shrink-0">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none"><Icons.Search /></div>
+                                    <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="bg-slate-50 dark:bg-slate-900 py-2 pl-9 pr-4 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 w-36 md:w-48 dark:text-white transition-all border dark:border-slate-700" />
                                 </div>
-                                
-                                <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"><option value="All">Year: All</option>{uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}</select>
-                                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"><option value="All">Month: All</option>{monthList.map(m => <option key={m.v} value={m.v}>{m.n}</option>)}</select>
-                                <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-500 max-w-[120px] dark:text-white truncate"><option value="All">Owner: All</option>{uniqueOwners.map(o => <option key={o} value={o}>{o}</option>)}</select>
-                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"><option value="All">Status: All</option>{uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"><option value="All">Type: All</option>{uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                                <button onClick={() => setFilterOverdue(!filterOverdue)} className={`px-4 py-2.5 rounded-xl text-[11px] font-black transition-all border ${filterOverdue ? 'bg-rose-500 text-white border-rose-500 shadow-md' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 border-rose-100 dark:border-rose-900/50 hover:bg-rose-500 hover:text-white'}`}>{filterOverdue ? '🔥 OVERDUE' : 'SHOW OVERDUE'}</button>
+                                <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 dark:text-white"><option value="All">Year: All</option>{uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 dark:text-white"><option value="All">Month: All</option>{monthList.map(m => <option key={m.v} value={m.v}>{m.n}</option>)}</select>
+                                <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 max-w-[100px] md:max-w-[130px] dark:text-white"><option value="All">Owner: All</option>{uniqueOwners.map(o => <option key={o} value={o}>{o}</option>)}</select>
+                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 dark:text-white"><option value="All">Status: All</option>{uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 dark:text-white"><option value="All">Type: All</option>{uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                                <button onClick={() => setFilterOverdue(!filterOverdue)} className={`px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-[11px] font-black transition-all border shrink-0 ${filterOverdue ? 'bg-rose-500 text-white border-rose-500 shadow-md' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 border-rose-100 dark:border-rose-900/50 hover:bg-rose-500 hover:text-white'}`}>{filterOverdue ? '🔥 OVERDUE' : 'SHOW OVERDUE'}</button>
                                 
                                 {(searchTerm || filterYear !== 'All' || filterMonth !== 'All' || filterOwner !== 'All' || filterStatus !== 'All' || filterType !== 'All' || filterOverdue) && (
-                                    <button onClick={() => { setSearchTerm(''); setFilterYear('All'); setFilterMonth('All'); setFilterOwner('All'); setFilterStatus('All'); setFilterType('All'); setFilterOverdue(false); }} className="text-[10px] font-black text-slate-400 uppercase hover:text-rose-500 transition-colors px-2">Reset</button>
+                                    <button onClick={() => { setSearchTerm(''); setFilterYear('All'); setFilterMonth('All'); setFilterOwner('All'); setFilterStatus('All'); setFilterType('All'); setFilterOverdue(false); }} className="text-[10px] font-black text-slate-400 uppercase shrink-0 px-2">Clear</button>
                                 )}
                                 
-                                <div className="ml-auto flex items-center gap-2">
-                                    <select value={fontSize} onChange={e => setFontSize(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
-                                        <option value="text-[10px]">Font: Small</option>
-                                        <option value="text-xs">Font: Medium</option>
-                                        <option value="text-sm">Font: Large</option>
+                                <div className="ml-auto hidden md:flex items-center gap-2 shrink-0">
+                                    <select value={fontSize} onChange={e => setFontSize(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2 text-[11px] font-bold outline-none dark:text-white">
+                                        <option value="text-[10px]">Font: Small</option><option value="text-xs">Font: Medium</option><option value="text-sm">Font: Large</option>
                                     </select>
                                     <div className="relative" onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => setShowColMenu(!showColMenu)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-slate-500 bg-white dark:bg-slate-800 border dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-[11px] font-black tracking-widest"><Icons.View /> COLUMNS</button>
+                                        <button onClick={() => setShowColMenu(!showColMenu)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-slate-500 bg-white dark:bg-slate-800 border dark:border-slate-700 text-[11px] font-black tracking-widest"><Icons.View /> COLUMNS</button>
                                         {showColMenu && (
                                             <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-2xl p-4 z-50 animate-in fade-in">
                                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 border-b dark:border-slate-700 pb-2">Toggle Visibility</p>
                                                 <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
                                                     {initialColumns.map(col => (
-                                                        <label key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl cursor-pointer transition-colors">
-                                                            <input type="checkbox" checked={!hiddenCols.includes(col.id)} onChange={() => toggleColVisibility(col.id)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" />
+                                                        <label key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl cursor-pointer">
+                                                            <input type="checkbox" checked={!hiddenCols.includes(col.id)} onChange={() => toggleColVisibility(col.id)} className="w-4 h-4 text-blue-600 rounded" />
                                                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{col.label}</span>
                                                         </label>
                                                     ))}
@@ -664,39 +633,57 @@
                                             </div>
                                         )}
                                     </div>
-                                    <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 hover:bg-blue-600 hover:text-white transition-all text-[11px] font-black tracking-widest"><Icons.Download /> EXPORT</button>
+                                    <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 rounded-xl text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 text-[11px] font-black tracking-widest hover:bg-blue-600 hover:text-white transition-all"><Icons.Download /> EXPORT</button>
                                 </div>
                             </div>
                         </header>
 
-                        <div className="flex-1 p-8 overflow-hidden">
+                        <div className="flex-1 p-4 md:p-8 overflow-hidden">
                             {currentView === 'dashboard' && <DashboardView tasks={filteredAndSortedTasks} isDark={theme === 'dark'} />}
                             {currentView === 'activity' && <ActivityView logs={logs} />}
                             {currentView === 'tasks' && (
                                 <div className="h-full flex flex-col space-y-4 fade-up">
                                     {Object.keys(pendingEdits).length > 0 && (
-                                        <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-3xl flex items-center justify-between shadow-xl border border-amber-200 dark:border-amber-900/50 animate-in slide-in-from-top-4">
-                                            <div className="flex items-center gap-3"><span className="px-3 py-1 bg-amber-500 text-white rounded-full font-black animate-pulse">{Object.keys(pendingEdits).length}</span><p className="font-bold text-amber-800 dark:text-amber-200 uppercase tracking-widest text-[10px]">Unsaved changes</p></div>
-                                            <div className="flex gap-3"><button onClick={() => setPendingEdits({})} className="px-5 py-2 text-slate-500 font-bold uppercase text-xs hover:text-slate-800">Discard</button><button onClick={saveInline} className="px-8 py-2 bg-amber-500 text-white font-black rounded-full shadow-lg hover:bg-amber-600 transition-all flex items-center gap-2 text-xs tracking-widest"><Icons.Save /> COMMIT UPDATES</button></div>
+                                        <div className="bg-amber-50 dark:bg-amber-900/20 p-3 md:p-4 rounded-2xl md:rounded-3xl flex items-center justify-between shadow-xl border border-amber-200 dark:border-amber-900/50 flex-wrap gap-2">
+                                            <div className="flex items-center gap-2 md:gap-3"><span className="px-2 py-1 md:px-3 md:py-1 bg-amber-500 text-white rounded-full font-black text-xs animate-pulse">{Object.keys(pendingEdits).length}</span><p className="font-bold text-amber-800 dark:text-amber-200 uppercase tracking-widest text-[9px] md:text-[10px]">Unsaved changes</p></div>
+                                            <div className="flex gap-2"><button onClick={() => setPendingEdits({})} className="px-3 md:px-5 py-2 text-slate-500 font-bold uppercase text-[10px] md:text-xs">Discard</button><button onClick={saveInline} className="px-4 md:px-8 py-2 bg-amber-500 text-white font-black rounded-full shadow-lg flex items-center gap-2 text-[10px] md:text-xs"><Icons.Save /> SAVE</button></div>
                                         </div>
                                     )}
-                                    <div className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-premium border dark:border-slate-700/50 overflow-hidden flex-1 flex flex-col relative transition-colors duration-300">
+                                    {/* Mobile Column Toggle (Visible only on small screens) */}
+                                    <div className="md:hidden flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border dark:border-slate-700">
+                                        <div className="relative w-full" onClick={e => e.stopPropagation()}>
+                                            <button onClick={() => setShowColMenu(!showColMenu)} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 text-xs font-bold"><Icons.View /> Manage Columns</button>
+                                            {showColMenu && (
+                                                <div className="absolute left-0 mt-2 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl p-4 z-50">
+                                                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                                                        {initialColumns.map(col => (
+                                                            <label key={col.id} className="flex items-center gap-2 p-1">
+                                                                <input type="checkbox" checked={!hiddenCols.includes(col.id)} onChange={() => toggleColVisibility(col.id)} className="w-4 h-4" />
+                                                                <span className="text-[10px] font-bold dark:text-white truncate">{col.label}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="bg-white dark:bg-slate-800 rounded-2xl md:rounded-[3rem] shadow-soft border dark:border-slate-700/50 overflow-hidden flex-1 flex flex-col relative pb-8 md:pb-0">
                                         <div className="overflow-x-auto custom-scrollbar flex-1">
                                             <table className={`w-full text-left border-separate border-spacing-0 table-fixed transition-colors ${fontSize}`}>
                                                 <thead className="sticky top-0 z-20">
-                                                    <tr className="bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-700 transition-colors">
+                                                    <tr className="bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-700">
                                                         {visibleColOrder.map(colId => {
                                                             const col = initialColumns.find(c => c.id === colId);
                                                             return (
-                                                                <th key={colId} style={{ width: colWidths[colId] }} className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 relative group transition-colors" draggable onDragStart={(e) => e.dataTransfer.setData("colId", colId)} onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('column-drag-target'); }} onDragLeave={e => e.currentTarget.classList.remove('column-drag-target')} onDrop={e => { e.currentTarget.classList.remove('column-drag-target'); const sId = e.dataTransfer.getData("colId"); if(sId === colId) return; const nO = [...colOrder]; const sIdx = nO.indexOf(sId); const tIdx = nO.indexOf(colId); nO.splice(sIdx, 1); nO.splice(tIdx, 0, sId); setColOrder(nO); localStorage.setItem('qc_col_order_v11', JSON.stringify(nO)); }}>
-                                                                    <div className="flex items-center gap-2 cursor-pointer hover:text-blue-500 transition-all" onClick={() => setSortConfig({ key: colId, direction: sortConfig.key === colId && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>{col.label} <Icons.Sort dir={sortConfig.key === colId ? sortConfig.direction : null} /></div>
-                                                                    <div className="resizer" onMouseDown={e => attachResizer(e, colId)} />
+                                                                <th key={colId} style={{ width: colWidths[colId] }} className="px-4 py-4 md:px-8 md:py-6 text-[9px] md:text-[10px] font-black uppercase tracking-wider md:tracking-widest text-slate-400 relative group bg-slate-50 dark:bg-slate-900" draggable onDragStart={(e) => e.dataTransfer.setData("colId", colId)} onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('column-drag-target'); }} onDragLeave={e => e.currentTarget.classList.remove('column-drag-target')} onDrop={e => { e.currentTarget.classList.remove('column-drag-target'); const sId = e.dataTransfer.getData("colId"); if(sId === colId) return; const nO = [...colOrder]; const sIdx = nO.indexOf(sId); const tIdx = nO.indexOf(colId); nO.splice(sIdx, 1); nO.splice(tIdx, 0, sId); setColOrder(nO); localStorage.setItem('qc_col_order_v11', JSON.stringify(nO)); }}>
+                                                                    <div className="flex items-center gap-1 md:gap-2 cursor-pointer hover:text-blue-500 transition-all" onClick={() => setSortConfig({ key: colId, direction: sortConfig.key === colId && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>{col.label} <Icons.Sort dir={sortConfig.key === colId ? sortConfig.direction : null} /></div>
+                                                                    <div className="resizer" onMouseDown={e => attachResizer(e, colId)} onTouchStart={e => attachResizer(e, colId)} />
                                                                 </th>
                                                             );
                                                         })}
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y dark:divide-slate-700/50 transition-colors">
+                                                <tbody className="divide-y dark:divide-slate-700/50">
                                                     {filteredAndSortedTasks.length === 0 ? <tr><td colSpan={visibleColOrder.length}><EmptyState /></td></tr> : 
                                                         filteredAndSortedTasks.map(task => {
                                                             const cD = pendingEdits[task.id] || task;
@@ -704,13 +691,13 @@
                                                                 <tr key={task.id} className="hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-all group">
                                                                     {visibleColOrder.map(colId => {
                                                                         if (colId === 'action') return (
-                                                                            <td key={colId} className="px-6 py-3"><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setCurrentTask(task); setIsEditing(true); setIsModalOpen(true); }} className="p-2.5 text-blue-600 hover:bg-white dark:hover:bg-slate-700 rounded-xl shadow-sm transition-all"><Icons.Edit /></button><button onClick={async () => { if(confirm(`Purge ${task.refNo}?`)) { await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks").doc(task.id).delete(); logActivity("Deleted", "Ref: " + (task.refNo || "Unknown"), activeUser, "Deleted permanently"); } }} className="p-2.5 text-rose-500 hover:bg-white dark:hover:bg-slate-700 rounded-xl shadow-sm transition-all"><Icons.Trash /></button></div></td>
+                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><div className="flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setCurrentTask(task); setIsEditing(true); setIsModalOpen(true); }} className="p-2 text-blue-600 bg-white dark:bg-slate-700 md:bg-transparent hover:bg-white rounded-lg md:rounded-xl shadow-sm md:shadow-none hover:shadow-sm"><Icons.Edit /></button><button onClick={async () => { if(confirm(`Purge ${task.refNo}?`)) { await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks").doc(task.id).delete(); logActivity("Deleted", "Ref: " + (task.refNo || "Unknown"), activeUser, "Deleted permanently"); } }} className="p-2 text-rose-500 bg-white dark:bg-slate-700 md:bg-transparent hover:bg-white rounded-lg md:rounded-xl shadow-sm md:shadow-none hover:shadow-sm"><Icons.Trash /></button></div></td>
                                                                         );
                                                                         if (colId === 'status') return (
-                                                                            <td key={colId} className="px-6 py-3"><select value={cD.status} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, status: e.target.value}}))} className={`px-3 py-1.5 rounded-full font-black uppercase border-0 shadow-sm outline-none cursor-pointer tracking-wider transition-colors w-full ${getStatusStyles(cD.status)} ${fontSize}`}><option value="Completed">Completed</option><option value="On progress">On progress</option><option value="Pending">Pending</option><option value="Cancelled">Cancelled</option></select></td>
+                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><select value={cD.status} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, status: e.target.value}}))} className={`px-2 py-1 md:px-4 md:py-2 rounded-full font-black uppercase border-0 shadow-sm outline-none cursor-pointer tracking-wider w-full ${getStatusStyles(cD.status)} ${fontSize}`}><option value="Completed">Completed</option><option value="On progress">On progress</option><option value="Pending">Pending</option><option value="Cancelled">Cancelled</option></select></td>
                                                                         );
                                                                         return (
-                                                                            <td key={colId} className="px-6 py-3"><input type={colId.includes('Date') || colId === 'dueTarget' ? 'date' : 'text'} value={cD[colId] || ''} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} /></td>
+                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><input type={colId.includes('Date') || colId === 'dueTarget' ? 'date' : 'text'} value={cD[colId] || ''} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} /></td>
                                                                         );
                                                                     })}
                                                                 </tr>
@@ -726,104 +713,109 @@
                         </div>
                     </main>
 
-                    {/* MODALS */}
+                    {/* MOBILE BOTTOM NAVIGATION */}
+                    <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t dark:border-slate-800 z-50 flex justify-around items-center px-2 py-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+                        {[ { id: 'dashboard', label: 'Overview', icon: <Icons.Dashboard /> }, { id: 'tasks', label: 'Projects', icon: <Icons.Tasks /> }, { id: 'activity', label: 'History', icon: <Icons.Activity /> } ].map(item => (
+                            <button key={item.id} onClick={() => {setCurrentView(item.id); setShowMobileProfile(false);}} className={`flex flex-col items-center gap-1 p-2 w-16 rounded-xl transition-all ${currentView === item.id && !showMobileProfile ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                {item.icon} <span className="text-[9px] font-bold">{item.label}</span>
+                            </button>
+                        ))}
+                        <button onClick={() => setShowMobileProfile(!showMobileProfile)} className={`flex flex-col items-center gap-1 p-2 w-16 rounded-xl transition-all ${showMobileProfile ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <Icons.User /> <span className="text-[9px] font-bold">Profile</span>
+                        </button>
+                    </nav>
+
+                    {/* MOBILE PROFILE DRAWER */}
+                    {showMobileProfile && (
+                        <div className="md:hidden fixed bottom-20 left-4 right-4 bg-white dark:bg-slate-800 rounded-3xl shadow-premium border dark:border-slate-700 p-6 z-50 animate-in slide-in-from-bottom-10">
+                            <div className="flex items-center gap-4 mb-6 pb-4 border-b dark:border-slate-700">
+                                <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black text-xl">{activeUser?.charAt(0)}</div>
+                                <div><p className="font-black dark:text-white text-lg">{activeUser}</p><p className="text-xs text-slate-500">Active Session</p></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-2xl dark:text-white font-bold text-xs"><div className="text-blue-500">{Icons.Theme(theme === 'dark')}</div> Toggle Theme</button>
+                                <button onClick={() => { setActiveUser(null); sessionStorage.removeItem('qc_active_user'); }} className="flex flex-col items-center justify-center gap-2 p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 rounded-2xl font-bold text-xs"><Icons.Logout /> Sign Out</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL: ADD/EDIT */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/70 backdrop-blur-md animate-in fade-in transition-colors">
-                            <div className="bg-white dark:bg-slate-800 rounded-[4rem] shadow-premium w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden border dark:border-slate-700 transition-colors duration-500">
-                                <div className="px-12 py-8 border-b dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-                                    <h2 className="text-3xl font-black uppercase tracking-tighter dark:text-white transition-colors">{isEditing ? 'Revise Task' : 'New Project Initiation'}</h2>
-                                    <button onClick={() => setIsModalOpen(false)} className="p-4 bg-white dark:bg-slate-700 rounded-full shadow-sm hover:bg-slate-100 transition-all"><Icons.X /></button>
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-slate-950/70 backdrop-blur-md animate-in fade-in">
+                            <div className="bg-white dark:bg-slate-800 rounded-[2rem] md:rounded-[4rem] shadow-premium w-full max-w-5xl max-h-[85vh] md:max-h-[92vh] flex flex-col overflow-hidden border dark:border-slate-700">
+                                <div className="px-6 py-5 md:px-12 md:py-8 border-b dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+                                    <div><h2 className="text-lg md:text-3xl font-black uppercase tracking-tighter dark:text-white leading-tight">{isEditing ? 'Revise Task' : 'New Project Initiation'}</h2><p className="text-slate-400 font-medium text-[10px] md:text-xs mt-1 hidden md:block">Please provide comprehensive data.</p></div>
+                                    <button onClick={() => setIsModalOpen(false)} className="p-3 md:p-4 bg-white dark:bg-slate-700 rounded-full shadow-sm hover:bg-slate-100"><Icons.X /></button>
                                 </div>
-                                <div className="p-12 overflow-y-auto custom-scrollbar grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors">
-                                    <div className="col-span-full flex gap-4 p-2 bg-slate-100 dark:bg-slate-900 rounded-[2.5rem] mb-4">
+                                <div className="p-6 md:p-12 overflow-y-auto custom-scrollbar grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                                    <div className="col-span-full flex flex-wrap gap-2 md:gap-4 p-2 bg-slate-100 dark:bg-slate-900 rounded-[1.5rem] md:rounded-[2.5rem] mb-2">
                                         {['On progress', 'Completed', 'Pending', 'Cancelled'].map(st => (
-                                            <button key={st} onClick={() => setCurrentTask({...currentTask, status: st})} className={`flex-1 py-4 rounded-[2rem] font-black text-[10px] uppercase tracking-widest transition-all ${currentTask.status === st ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/30' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}>{st}</button>
+                                            <button key={st} onClick={() => setCurrentTask({...currentTask, status: st})} className={`flex-1 py-3 md:py-4 rounded-[1rem] md:rounded-[2rem] font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all ${currentTask.status === st ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'}`}>{st}</button>
                                         ))}
                                     </div>
-                                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em]">Ref No.</label><input type="text" value={currentTask.refNo} onChange={e => setCurrentTask({...currentTask, refNo: e.target.value})} className="w-full px-8 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 font-bold dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
-                                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em]">Category</label><input type="text" value={currentTask.type} onChange={e => setCurrentTask({...currentTask, type: e.target.value})} className="w-full px-8 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 font-bold dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
-                                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em]">Fiscal Year</label><input type="text" value={currentTask.year} onChange={e => setCurrentTask({...currentTask, year: e.target.value})} className="w-full px-8 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 font-bold dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
-                                    <div className="col-span-full space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em]">Description</label><textarea rows="2" value={currentTask.description} onChange={e => setCurrentTask({...currentTask, description: e.target.value})} className="w-full px-8 py-4 rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 font-medium dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
-                                    <div className="col-span-full space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em]">Assignment</label><textarea rows="2" value={currentTask.assignment} onChange={e => setCurrentTask({...currentTask, assignment: e.target.value})} className="w-full px-8 py-4 rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 font-medium dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
-                                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em] text-rose-500">Due Date</label><input type="date" value={currentTask.dueTarget} onChange={e => setCurrentTask({...currentTask, dueTarget: e.target.value})} className="w-full px-8 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-rose-500/20 font-bold dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
-                                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em] text-emerald-500">Completed Date</label><input type="date" value={currentTask.completedDate} onChange={e => setCurrentTask({...currentTask, completedDate: e.target.value})} className="w-full px-8 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-emerald-500/20 font-bold dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
-                                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em]">Owner</label><input type="text" value={currentTask.owner} onChange={e => setCurrentTask({...currentTask, owner: e.target.value})} className="w-full px-8 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 font-bold dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
-                                    <div className="col-span-full space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-3 tracking-[0.2em]">Remark</label><input type="text" value={currentTask.remark} onChange={e => setCurrentTask({...currentTask, remark: e.target.value})} className="w-full px-8 py-4 rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 dark:text-white outline-none shadow-inner shadow-slate-200/50 transition-all" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Ref No.</label><input type="text" value={currentTask.refNo} onChange={e => setCurrentTask({...currentTask, refNo: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Category (Type)</label><input type="text" value={currentTask.type} onChange={e => setCurrentTask({...currentTask, type: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Fiscal Year</label><input type="text" value={currentTask.year} onChange={e => setCurrentTask({...currentTask, year: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
+                                    <div className="col-span-full space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Scope Description</label><textarea rows="2" value={currentTask.description} onChange={e => setCurrentTask({...currentTask, description: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-medium dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
+                                    <div className="col-span-full space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Lead Assignment</label><textarea rows="2" value={currentTask.assignment} onChange={e => setCurrentTask({...currentTask, assignment: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-medium dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-rose-500 ml-3">Target Due Date</label><input type="date" value={currentTask.dueTarget} onChange={e => setCurrentTask({...currentTask, dueTarget: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-rose-500/50 font-bold dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-emerald-500 ml-3">Completed Date</label><input type="date" value={currentTask.completedDate} onChange={e => setCurrentTask({...currentTask, completedDate: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-emerald-500/50 font-bold dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Owner / PIC</label><input type="text" value={currentTask.owner} onChange={e => setCurrentTask({...currentTask, owner: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
+                                    <div className="col-span-full space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Remarks</label><input type="text" value={currentTask.remark} onChange={e => setCurrentTask({...currentTask, remark: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
                                 </div>
-                                <div className="p-10 border-t dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 flex justify-end gap-4 transition-colors">
-                                    <button onClick={() => setIsModalOpen(false)} className="px-10 font-black text-slate-400 uppercase text-xs hover:text-slate-800 transition-colors tracking-widest">Abort</button>
-                                    <button onClick={handleSave} disabled={isProcessing} className="bg-blue-600 text-white px-14 py-4 rounded-full font-black shadow-2xl shadow-blue-600/30 flex items-center gap-3 hover:bg-blue-700 active:scale-95 transition-all text-xs tracking-widest uppercase">
-                                        {isProcessing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin rounded-full"></div> : <Icons.Save />} Commit Changes
+                                <div className="p-6 md:p-10 border-t dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 flex justify-end gap-3 md:gap-6 shrink-0">
+                                    <button onClick={() => setIsModalOpen(false)} className="px-6 md:px-10 py-3 font-black text-slate-400 uppercase text-[10px] md:text-xs">Abort</button>
+                                    <button onClick={handleSave} disabled={isProcessing} className="bg-blue-600 text-white px-8 md:px-14 py-3 md:py-4 rounded-full font-black shadow-lg hover:bg-blue-700 active:scale-95 transition-all text-[10px] md:text-xs flex items-center gap-2">
+                                        {isProcessing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin rounded-full"></div> : <Icons.Save />} COMMIT
                                     </button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* IMPORT MODAL WITH OVERWRITE OPTIONS */}
+                    {/* IMPORT MODAL */}
                     {importPreview && (
-                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in transition-colors duration-500">
-                            <div className="bg-white dark:bg-slate-800 rounded-[4rem] w-full max-w-4xl p-12 shadow-premium flex flex-col max-h-[85vh] border dark:border-slate-700 transition-colors">
-                                <h2 className="text-4xl font-black dark:text-white mb-3 tracking-tighter uppercase transition-colors">Review Stream</h2>
-                                <p className="text-slate-400 font-medium mb-6 transition-colors">Algorithm identified <span className="text-blue-500 font-black tracking-tight">{importPreview.length}</span> records.</p>
+                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
+                            <div className="bg-white dark:bg-slate-800 rounded-[2rem] md:rounded-[4rem] w-full max-w-4xl p-6 md:p-12 shadow-premium flex flex-col max-h-[85vh] border dark:border-slate-700">
+                                <h2 className="text-xl md:text-4xl font-black dark:text-white mb-2 md:mb-3 tracking-tighter uppercase">Review Stream</h2>
+                                <p className="text-slate-400 text-xs md:text-sm font-medium mb-6">Identified <span className="text-blue-500 font-black tracking-tight">{importPreview.length}</span> records.</p>
                                 
                                 {overlappingCount > 0 && (
-                                    <div className="mb-6 p-5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-[2rem] transition-colors">
-                                        <p className="font-bold text-amber-800 dark:text-amber-400 flex items-center gap-2 mb-3 uppercase tracking-widest text-[10px]">
-                                            ⚠️ Detected {overlappingCount} Overlapping Ref No.
-                                        </p>
-                                        <div className="flex flex-col gap-3">
-                                            <label className="flex items-center gap-3 cursor-pointer">
-                                                <input type="radio" name="importMode" value="append" checked={importMode==='append'} onChange={e=>setImportMode(e.target.value)} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
-                                                <span className="text-sm font-bold dark:text-slate-300">Append (เพิ่มเป็นรายการใหม่ทั้งหมด)</span>
-                                            </label>
-                                            <label className="flex items-center gap-3 cursor-pointer">
-                                                <input type="radio" name="importMode" value="overwrite" checked={importMode==='overwrite'} onChange={e=>setImportMode(e.target.value)} className="w-4 h-4 text-rose-600 focus:ring-rose-500" />
-                                                <span className="text-sm font-bold dark:text-slate-300">Overwrite (ลบของเดิมที่ Ref No ตรงกันแล้วเขียนทับใหม่)</span>
-                                            </label>
+                                    <div className="mb-4 md:mb-6 p-4 md:p-5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl">
+                                        <p className="font-bold text-amber-800 dark:text-amber-400 mb-2 uppercase text-[9px] md:text-[10px]">⚠️ {overlappingCount} Overlapping Ref No.</p>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="importMode" value="append" checked={importMode==='append'} onChange={e=>setImportMode(e.target.value)} className="w-3 h-3 md:w-4 md:h-4 text-blue-600" /><span className="text-[10px] md:text-xs font-bold dark:text-slate-300">Append (เพิ่มใหม่ทั้งหมด)</span></label>
+                                            <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="importMode" value="overwrite" checked={importMode==='overwrite'} onChange={e=>setImportMode(e.target.value)} className="w-3 h-3 md:w-4 md:h-4 text-rose-600" /><span className="text-[10px] md:text-xs font-bold dark:text-slate-300">Overwrite (ทับข้อมูลเดิมที่ Ref ตรงกัน)</span></label>
                                         </div>
                                     </div>
                                 )}
 
-                                <div className="flex-1 overflow-y-auto custom-scrollbar border dark:border-slate-700 rounded-[2.5rem] mb-10 overflow-hidden shadow-inner bg-slate-50 dark:bg-slate-900/30 transition-colors">
-                                    <table className="w-full text-xs text-left">
-                                        <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 transition-colors">
-                                            <tr><th className="px-6 py-4 font-black uppercase text-slate-400 tracking-widest text-xs transition-colors">Ref ID</th><th className="px-6 py-4 font-black uppercase text-slate-400 tracking-widest text-xs transition-colors">Owner</th><th className="px-6 py-4 font-black uppercase text-slate-400 tracking-widest text-right text-xs transition-colors transition-colors">Workflow</th></tr>
+                                <div className="flex-1 overflow-y-auto custom-scrollbar border dark:border-slate-700 rounded-[1.5rem] md:rounded-[2.5rem] mb-6 md:mb-10 shadow-inner bg-slate-50 dark:bg-slate-900/30">
+                                    <table className="w-full text-[10px] md:text-xs text-left">
+                                        <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0">
+                                            <tr><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400">Ref ID</th><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400">Owner</th><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400 text-right">Status</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-slate-700/50">
-                                            {importPreview.slice(0, 100).map((r, i) => (
-                                                <tr key={i} className="transition-colors"><td className="px-6 py-4 font-bold dark:text-slate-200">{r.refNo || 'N/A'}</td><td className="px-6 py-4 text-slate-500 transition-colors">{r.owner}</td><td className="px-6 py-4 text-slate-400 uppercase font-black text-right transition-colors">{r.status}</td></tr>
+                                            {importPreview.slice(0, 50).map((r, i) => (
+                                                <tr key={i}><td className="px-4 md:px-6 py-3 font-bold dark:text-slate-200">{r.refNo || 'N/A'}</td><td className="px-4 md:px-6 py-3 text-slate-500 truncate max-w-[100px] md:max-w-none">{r.owner}</td><td className="px-4 md:px-6 py-3 text-slate-400 uppercase font-black text-right">{r.status}</td></tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="flex gap-6">
-                                    <button onClick={() => setImportPreview(null)} className="flex-1 py-6 rounded-[2rem] bg-slate-100 dark:bg-slate-700 font-black uppercase text-xs text-slate-400 hover:bg-slate-200 transition-colors tracking-widest">Abort Ingestion</button>
+                                <div className="flex gap-3 md:gap-6 shrink-0">
+                                    <button onClick={() => setImportPreview(null)} className="flex-1 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] bg-slate-100 dark:bg-slate-700 font-black uppercase text-[10px] md:text-xs text-slate-400">Abort</button>
                                     <button onClick={async () => {
-                                        setIsProcessing(true); 
-                                        const coll = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks");
-                                        
+                                        setIsProcessing(true); const coll = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks");
                                         if (importMode === 'overwrite' && overlappingCount > 0) {
-                                            const importRefNos = new Set(importPreview.map(r => r.refNo).filter(Boolean));
-                                            const docsToDelete = tasks.filter(t => importRefNos.has(t.refNo));
-                                            for (let i = 0; i < docsToDelete.length; i += 500) {
-                                                const batch = dbInst.batch();
-                                                docsToDelete.slice(i, i+500).forEach(t => batch.delete(coll.doc(t.id)));
-                                                await batch.commit();
-                                            }
+                                            const iRefs = new Set(importPreview.map(r => r.refNo).filter(Boolean));
+                                            const dD = tasks.filter(t => iRefs.has(t.refNo));
+                                            for (let i=0; i<dD.length; i+=500) { const b = dbInst.batch(); dD.slice(i, i+500).forEach(t => b.delete(coll.doc(t.id))); await b.commit(); }
                                         }
-
-                                        for (let i = 0; i < importPreview.length; i += 500) {
-                                            const batch = dbInst.batch();
-                                            importPreview.slice(i, i+500).forEach(t => {
-                                                batch.set(coll.doc(), {...t, createdAt: Date.now(), updatedAt: Date.now(), updatedBy: activeUser});
-                                            });
-                                            await batch.commit();
+                                        for (let i=0; i<importPreview.length; i+=500) {
+                                            const b = dbInst.batch(); importPreview.slice(i, i+500).forEach(t => b.set(coll.doc(), {...t, createdAt: Date.now(), updatedAt: Date.now(), updatedBy: activeUser})); await b.commit();
                                         }
-                                        
-                                        logActivity("Batch Ingestion", `${importPreview.length} rows (${importMode})`, activeUser, "Imported from Excel"); 
-                                        setImportPreview(null); setIsProcessing(false);
-                                    }} className="flex-[2] py-6 rounded-[2rem] bg-blue-600 text-white font-black uppercase text-xs shadow-xl shadow-blue-600/30 flex items-center justify-center gap-3 hover:bg-blue-700 active:scale-95 transition-all tracking-widest transition-colors duration-300">
+                                        logActivity("Batch Ingestion", `${importPreview.length} rows`, activeUser, `Mode: ${importMode}`); setImportPreview(null); setIsProcessing(false);
+                                    }} className="flex-[2] py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] bg-blue-600 text-white font-black uppercase text-[10px] md:text-xs shadow-lg flex items-center justify-center gap-2">
                                         {isProcessing ? <div className="w-4 h-4 border-2 border-white/20 border-t-white animate-spin rounded-full"></div> : null} PUSH TO CLOUD
                                     </button>
                                 </div>
@@ -834,20 +826,8 @@
             );
         }
 
-        // Final Mount
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-    </script>
-
-    <!-- Service Worker Registration for PWA -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('Service Worker เริ่มทำงานแล้ว!', reg.scope))
-                    .catch(err => console.log('Service Worker พังจ้า: ', err));
-            });
-        }
     </script>
 </body>
 </html>
