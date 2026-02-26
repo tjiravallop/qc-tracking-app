@@ -2,18 +2,15 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <!-- บังคับการแสดงผลให้เป็นแบบแอปมือถือ 100% -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>QC Tracking</title>
+    <title>QC Tracking Pro</title>
     
-    <!-- PWA Setup -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#3b82f6">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="./icon-192.png">
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -27,7 +24,6 @@
         }
     </script>
     
-    <!-- Core Libraries -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -35,7 +31,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
@@ -53,9 +48,7 @@
         .column-drag-target { border-left: 3px solid #3b82f6 !important; background-color: rgba(59, 130, 246, 0.05); }
         .fade-up { animation: fadeUp 0.4s ease-out forwards; }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* รองรับการแสดงผล 100vh บนมือถือแบบไม่เพี้ยน */
         .h-dvh { height: 100dvh; }
-        /* ซ่อน Scrollbar แนวแกน X ให้ดูคลีนบนมือถือ */
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
@@ -66,15 +59,13 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
-        // =============================================================
-        // 1. TOOLBOX (Constants, Icons, Helpers)
-        // =============================================================
         const USER_PINS = { "2098": "Thanachot J.", "0843": "Sangdao T.", "2149": "Vinit R.", "9999": "Admin" };
-        const emptyForm = { year: '', inputDate: '', refNo: '', type: '', description: '', assignment: '', documentRevised: '', effectiveDate: '', dueTarget: '', completedDate: '', owner: '', status: 'On progress', remark: '' };
+        const emptyForm = { year: '', inputDate: '', refNo: '', type: '', description: '', assignment: '', documentRevised: '', effectiveDate: '', dueTarget: '', completedDate: '', owner: '', status: 'On progress', remark: '', noOfDocument: 0 };
         
         const initialColumns = [
             { id: 'action', label: 'Actions', width: 90 },
             { id: 'status', label: 'Status', width: 140 },
+            { id: 'noOfDocument', label: 'No. of Document', width: 140 },
             { id: 'refNo', label: 'Ref No.', width: 130 },
             { id: 'type', label: 'Type', width: 100 },
             { id: 'description', label: 'Description', width: 250 },
@@ -102,6 +93,7 @@
             Save: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>,
             X: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>,
             View: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
+            Calendar: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
             Sort: ({ dir }) => (
                 <div className="flex flex-col ml-1 opacity-50 group-hover:opacity-100">
                     <svg width="8" height="8" viewBox="0 0 24 24" fill={dir === 'asc' ? '#3b82f6' : 'currentColor'}><path d="m12 4 8 8H4z"/></svg>
@@ -123,7 +115,8 @@
             const fieldsToWatch = { 
                 status: 'Status', refNo: 'Ref No.', type: 'Type', year: 'Year',
                 description: 'Description', assignment: 'Assignment', 
-                dueTarget: 'Due', completedDate: 'Completed', owner: 'Owner', remark: 'Remark' 
+                dueTarget: 'Due', completedDate: 'Completed', owner: 'Owner', remark: 'Remark',
+                noOfDocument: 'No. of Doc'
             };
             for(let key in fieldsToWatch) {
                 const oldV = String(oldData[key] || '').trim();
@@ -137,9 +130,6 @@
             return changes.join(' | ');
         };
 
-        // =============================================================
-        // 2. FIREBASE CONFIG
-        // =============================================================
         const firebaseConfig = {
             apiKey: "AIzaSyDDS-p_tiX88djcRCSJsnhdiOBkBmDPTb8",
             authDomain: "qc-tracking-e3d1a.firebaseapp.com",
@@ -158,9 +148,6 @@
             authInst = firebase.auth();
         } catch(e) {}
 
-        // =============================================================
-        // 3. UI SUB-COMPONENTS
-        // =============================================================
         const IconLoader = () => (
             <div className="h-dvh flex items-center justify-center bg-slate-50 dark:bg-slate-900 flex-col px-4 text-center">
                 <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-4"></div>
@@ -182,89 +169,112 @@
                 if (chartRef.current) chartRef.current.destroy();
                 if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
                 const ctx = canvasRef.current.getContext('2d');
+                
+                const defaultDataLabels = {
+                    color: type === 'doughnut' ? '#fff' : (isDark ? '#e2e8f0' : '#475569'),
+                    font: { weight: 'bold', size: 10 },
+                    display: (context) => context.dataset.data[context.dataIndex] > 0
+                };
+                const mergedDataLabels = options?.plugins?.datalabels ? { ...defaultDataLabels, ...options.plugins.datalabels } : defaultDataLabels;
+
                 chartRef.current = new Chart(ctx, {
                     type, data,
                     options: {
                         ...options,
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
-                            ...options.plugins,
-                            datalabels: {
-                                color: type === 'doughnut' ? '#fff' : (isDark ? '#e2e8f0' : '#475569'),
-                                font: { weight: 'bold', size: 10 },
-                                display: (context) => context.dataset.data[context.dataIndex] > 0
-                            },
+                            ...options?.plugins,
+                            datalabels: mergedDataLabels,
                             tooltip: { backgroundColor: isDark ? '#1e293b' : '#fff', titleColor: isDark ? '#fff' : '#000', bodyColor: isDark ? '#94a3b8' : '#475569', borderColor: isDark ? '#334155' : '#e2e8f0', borderWidth: 1 }
                         }
                     }
                 });
-            }, [data, isDark, type]);
+            }, [data, isDark, type, options]);
             return <canvas ref={canvasRef} />;
         };
 
         const DashboardView = ({ tasks, isDark }) => {
             const today = new Date().toISOString().split('T')[0];
+            
             const stats = useMemo(() => {
-                const total = tasks.length;
-                const done = tasks.filter(t => t.status?.toLowerCase() === 'completed').length;
-                const overdue = tasks.filter(t => t.status?.toLowerCase() !== 'completed' && t.dueTarget && t.dueTarget < today).length;
-                return { total, done, overdue, rate: total ? Math.round((done / total) * 100) : 0 };
+                const totalTasks = tasks.length;
+                const totalDocs = tasks.reduce((sum, t) => sum + (parseInt(t.noOfDocument) || 0), 0);
+                const completedDocs = tasks.filter(t => t.status?.toLowerCase() === 'completed')
+                                          .reduce((sum, t) => sum + (parseInt(t.noOfDocument) || 0), 0);
+                const overdueTasks = tasks.filter(t => t.status?.toLowerCase() !== 'completed' && t.dueTarget && t.dueTarget < today).length;
+                const docRate = totalDocs ? Math.round((completedDocs / totalDocs) * 100) : 0;
+                
+                return { totalTasks, totalDocs, completedDocs, overdueTasks, docRate };
             }, [tasks]);
 
-            const pieData = {
-                labels: ['Completed', 'Overdue', 'In Progress'],
-                datasets: [{ data: [stats.done, stats.overdue, stats.total - stats.done - stats.overdue], backgroundColor: ['#22c55e', '#f43f5e', '#3b82f6'], borderWidth: 0, hoverOffset: 8 }]
-            };
+            const { monthKeys, labels, chart1Data, chart2Data } = useMemo(() => {
+                const getTaskMonth = (t) => {
+                    const d = t.inputDate || t.dueTarget || t.completedDate || '';
+                    if (d && d.length >= 7) return d.substring(0, 7);
+                    return 'Unknown';
+                };
+                
+                const getMonthLabel = (dateStr) => {
+                    if (dateStr === 'Unknown') return 'Unknown';
+                    const parts = dateStr.split('-');
+                    if (parts.length < 2) return dateStr;
+                    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    return `${monthNames[parseInt(parts[1], 10) - 1]} ${parts[0]}`;
+                };
 
-            const yearData = useMemo(() => {
-                const counts = {};
-                tasks.forEach(t => {
-                    if(t.year) {
-                        if(!counts[t.year]) counts[t.year] = { comp: 0, pend: 0 };
-                        if(t.status?.toLowerCase() === 'completed') counts[t.year].comp++;
-                        else counts[t.year].pend++;
-                    }
+                const mKeys = [...new Set(tasks.map(getTaskMonth))].sort();
+                const lbls = mKeys.map(getMonthLabel);
+
+                const statusColors = {
+                    'Completed': '#22c55e', 
+                    'On progress': '#f59e0b', 
+                    'Pending': '#3b82f6', 
+                    'Cancelled': '#f43f5e', 
+                };
+                const uniqueStatuses = [...new Set(tasks.map(t => t.status || 'Unknown'))].sort();
+                
+                const c1Datasets = uniqueStatuses.map(status => {
+                    return {
+                        label: status,
+                        backgroundColor: statusColors[status] || '#94a3b8',
+                        data: mKeys.map(mk => {
+                            return tasks.filter(t => getTaskMonth(t) === mk && t.status === status)
+                                        .reduce((sum, t) => sum + (parseInt(t.noOfDocument) || 0), 0);
+                        }),
+                        borderRadius: 4
+                    };
                 });
-                const labels = Object.keys(counts).sort();
-                return { labels, datasets: [ { label: 'Completed', data: labels.map(l => counts[l].comp), backgroundColor: '#22c55e', borderRadius: 4 }, { label: 'Pending', data: labels.map(l => counts[l].pend), backgroundColor: '#3b82f6', borderRadius: 4 } ] };
-            }, [tasks]);
 
-            const dueData = useMemo(() => {
-                const pendingByDue = tasks.filter(t => t.status?.toLowerCase() !== 'completed' && t.dueTarget).reduce((acc, t) => {
-                    const month = String(t.dueTarget).substring(0, 7);
-                    if (month && month.length === 7) acc[month] = (acc[month] || 0) + 1;
-                    return acc;
-                }, {});
-                const sortedDueMonths = Object.keys(pendingByDue).sort();
-                const formatMonth = (val) => {
-                    if (!val) return 'Unknown'; const parts = val.split('-'); if (parts.length < 2) return val;
-                    return `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1], 10) - 1]} ${parts[0]}`;
-                };
-                return { labels: sortedDueMonths.map(formatMonth), datasets: [{ label: 'Pending Tasks', data: sortedDueMonths.map(m => pendingByDue[m]), backgroundColor: '#f43f5e', borderRadius: 6 }] };
-            }, [tasks]);
+                const c2Data = mKeys.map(mk => {
+                    const tasksInMonth = tasks.filter(t => getTaskMonth(t) === mk);
+                    const refs = new Set(tasksInMonth.map(t => t.refNo).filter(Boolean));
+                    return refs.size > 0 ? refs.size : tasksInMonth.length;
+                });
 
-            const lineData = useMemo(() => {
-                const mCounts = tasks.filter(t => t.status?.toLowerCase() === 'completed' && t.completedDate).reduce((acc, t) => {
-                    const month = t.completedDate.substring(0, 7);
-                    if (month && month.length === 7) acc[month] = (acc[month] || 0) + 1;
-                    return acc;
-                }, {});
-                const sortedM = Object.keys(mCounts).sort().slice(-12);
-                const formatMonth = (val) => {
-                    if (!val) return 'Unknown'; const parts = val.split('-'); if (parts.length < 2) return val;
-                    return `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1], 10) - 1]} ${parts[0]}`;
+                return {
+                    monthKeys: mKeys,
+                    labels: lbls,
+                    chart1Data: { labels: lbls, datasets: c1Datasets },
+                    chart2Data: { 
+                        labels: lbls, 
+                        datasets: [{
+                            label: 'Total Ref No. Counts',
+                            backgroundColor: '#8b5cf6', 
+                            data: c2Data,
+                            borderRadius: 6
+                        }] 
+                    }
                 };
-                return { labels: sortedM.map(formatMonth), datasets: [{ label: 'Completed', data: sortedM.map(m => mCounts[m]), borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', fill: true, tension: 0.3 }] };
             }, [tasks]);
 
             return (
                 <div className="space-y-6 md:space-y-8 h-full overflow-y-auto custom-scrollbar pb-24 md:pb-10 px-2 md:px-4 fade-up">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                         {[
-                            { label: 'Health', val: `${stats.rate}%`, color: 'blue', icon: '🎯' },
-                            { label: 'Inventory', val: stats.total, color: 'indigo', icon: '📁' },
-                            { label: 'Completed', val: stats.done, color: 'emerald', icon: '✅' },
-                            { label: 'Overdue', val: stats.overdue, color: 'rose', icon: '🔥' },
+                            { label: 'Doc Health', val: `${stats.docRate}%`, color: 'blue', icon: '🎯' },
+                            { label: 'Total Docs', val: stats.totalDocs, color: 'indigo', icon: '📄' },
+                            { label: 'Completed Docs', val: stats.completedDocs, color: 'emerald', icon: '✅' },
+                            { label: 'Overdue Tasks', val: stats.overdueTasks, color: 'rose', icon: '🔥' },
                         ].map((card, i) => (
                             <div key={i} className="bg-white dark:bg-slate-800 p-5 md:p-8 rounded-[1.5rem] md:rounded-[2rem] shadow-soft border border-slate-100 dark:border-slate-700 hover:shadow-premium transition-all">
                                 <div className="flex justify-between items-start mb-2 md:mb-4">
@@ -275,22 +285,50 @@
                             </div>
                         ))}
                     </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
-                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-64 md:h-80 flex flex-col transition-colors">
-                            <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest text-slate-400 mb-4 md:mb-6 italic">Status Distribution</h4>
-                            <div className="flex-1 min-h-0"><ChartComp type="doughnut" data={pieData} options={{ cutout: '78%', plugins: { legend: { position: 'right', labels: { boxWidth: 10 } } } }} isDark={isDark} /></div>
+                    
+                    <div className="grid grid-cols-1 gap-6 md:gap-8">
+                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-[400px] md:h-[450px] flex flex-col transition-colors">
+                            <h4 className="font-black text-[12px] md:text-sm uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-4 md:mb-6 flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                                No. of Document By Month (Separated by Status)
+                            </h4>
+                            <div className="flex-1 min-h-0">
+                                <ChartComp type="bar" data={chart1Data} options={{ 
+                                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, 
+                                    plugins: { 
+                                        legend: { position: 'top', labels: { boxWidth: 12, font: { weight: 'bold' } } },
+                                        datalabels: {
+                                            color: '#ffffff', 
+                                            font: { weight: '900', size: 16 }, 
+                                            align: 'center',
+                                            anchor: 'center',
+                                            display: (context) => context.dataset.data[context.dataIndex] > 0
+                                        }
+                                    } 
+                                }} isDark={isDark} />
+                            </div>
                         </div>
-                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-64 md:h-80 flex flex-col transition-colors">
-                            <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest text-slate-400 mb-4 md:mb-6 italic text-rose-500">Pending by Due Date</h4>
-                            <div className="flex-1 min-h-0"><ChartComp type="bar" data={dueData} options={{ scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }} isDark={isDark} /></div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-64 md:h-80 flex flex-col transition-colors">
-                            <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest text-slate-400 mb-4 md:mb-6 italic">Yearly Volume (Stacked)</h4>
-                            <div className="flex-1 min-h-0"><ChartComp type="bar" data={yearData} options={{ scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'top', labels:{ boxWidth:10 } } } }} isDark={isDark} /></div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-64 md:h-80 flex flex-col transition-colors">
-                            <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest text-slate-400 mb-4 md:mb-6 italic text-emerald-500">Monthly Completion Trend</h4>
-                            <div className="flex-1 min-h-0"><ChartComp type="line" data={lineData} options={{ scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false }, datalabels: { align: 'top', color: isDark ? '#94a3b8' : '#64748b' } } }} isDark={isDark} /></div>
+
+                        <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-[400px] md:h-[450px] flex flex-col transition-colors">
+                            <h4 className="font-black text-[12px] md:text-sm uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-4 md:mb-6 flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-purple-500"></span>
+                                Counting Ref No. By Month
+                            </h4>
+                            <div className="flex-1 min-h-0">
+                                <ChartComp type="bar" data={chart2Data} options={{ 
+                                    scales: { y: { beginAtZero: true } }, 
+                                    plugins: { 
+                                        legend: { display: false },
+                                        datalabels: {
+                                            color: isDark ? '#ffffff' : '#334155',
+                                            font: { weight: '900', size: 18 }, 
+                                            align: 'end',
+                                            anchor: 'end',
+                                            display: (context) => context.dataset.data[context.dataIndex] > 0
+                                        }
+                                    } 
+                                }} isDark={isDark} />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -321,9 +359,6 @@
             </div>
         );
 
-        // =============================================================
-        // 4. MAIN APP ENGINE
-        // =============================================================
         function App() {
             const [theme, setTheme] = useState(localStorage.getItem('qc_theme') || 'light');
             const [activeUser, setActiveUser] = useState(sessionStorage.getItem('qc_active_user') || null);
@@ -336,37 +371,45 @@
             const [loading, setLoading] = useState(true);
             const [isProcessing, setIsProcessing] = useState(false);
             
-            // Mobile Specific State
             const [showMobileProfile, setShowMobileProfile] = useState(false);
+            const [activeDropdown, setActiveDropdown] = useState(null); // ตัวจัดการ Dropdown ป้องกันการเปิดซ้อน/ไม่ทำงาน
 
-            // Filters
+            // Multi-Select Filters
             const [searchTerm, setSearchTerm] = useState('');
-            const [filterYear, setFilterYear] = useState('All');
-            const [filterMonth, setFilterMonth] = useState('All');
-            const [filterOwner, setFilterOwner] = useState('All');
-            const [filterStatus, setFilterStatus] = useState('All');
-            const [filterType, setFilterType] = useState('All');
+            const [filterYears, setFilterYears] = useState([]);
+            const [filterMonths, setFilterMonths] = useState([]);
+            const [filterOwners, setFilterOwners] = useState([]);
+            const [filterStatuses, setFilterStatuses] = useState([]);
+            const [filterTypes, setFilterTypes] = useState([]);
+            
             const [filterOverdue, setFilterOverdue] = useState(false);
+            const [excludeEmptyDue, setExcludeEmptyDue] = useState(false); 
 
             // Table Interface
             const [fontSize, setFontSize] = useState(localStorage.getItem('qc_table_font') || 'text-xs');
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [currentTask, setCurrentTask] = useState(emptyForm);
             const [isEditing, setIsEditing] = useState(false);
-            const [colOrder, setColOrder] = useState(() => JSON.parse(localStorage.getItem('qc_col_order_v11')) || initialColumns.map(c => c.id));
-            const [colWidths, setColWidths] = useState(() => JSON.parse(localStorage.getItem('qc_col_widths_v11')) || initialColumns.reduce((a, c) => ({...a, [c.id]: c.width}), {}));
-            const [hiddenCols, setHiddenCols] = useState(() => JSON.parse(localStorage.getItem('qc_hidden_cols_v1')) || []);
-            const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
-            const [showColMenu, setShowColMenu] = useState(false);
             
+            // ✅ อัปเดตเวอร์ชัน Cache เป็น v15 เพื่อบังคับรีเซ็ตคอลัมน์ใหม่ 100%
+            const [colOrder, setColOrder] = useState(() => {
+                const saved = JSON.parse(localStorage.getItem('qc_col_order_v15'));
+                if (saved && saved.length === initialColumns.length) return saved;
+                return initialColumns.map(c => c.id);
+            });
+            const [colWidths, setColWidths] = useState(() => {
+                const saved = JSON.parse(localStorage.getItem('qc_col_widths_v15'));
+                if (saved && Object.keys(saved).length === initialColumns.length) return saved;
+                return initialColumns.reduce((a, c) => ({...a, [c.id]: c.width}), {});
+            });
+            const [hiddenCols, setHiddenCols] = useState(() => JSON.parse(localStorage.getItem('qc_hidden_cols_v15')) || []);
+            const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
             const [pendingEdits, setPendingEdits] = useState({});
             
-            // Import States
             const [importPreview, setImportPreview] = useState(null);
             const [importMode, setImportMode] = useState('append');
             const fileInputRef = useRef(null);
 
-            // Auto Logout Setup (30 Mins)
             useEffect(() => {
                 if (!activeUser) return;
                 let timeoutId;
@@ -383,20 +426,17 @@
             useEffect(() => {
                 document.documentElement.classList.toggle('dark', theme === 'dark');
                 localStorage.setItem('qc_theme', theme);
-                localStorage.setItem('qc_hidden_cols_v1', JSON.stringify(hiddenCols));
+                localStorage.setItem('qc_hidden_cols_v15', JSON.stringify(hiddenCols));
                 localStorage.setItem('qc_table_font', fontSize);
             }, [theme, hiddenCols, fontSize]);
 
             useEffect(() => {
                 if(!dbInst) return;
                 authInst.onAuthStateChanged(u => { if(!u) authInst.signInAnonymously(); });
-
                 const unsubTasks = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks")
                     .onSnapshot(snap => { setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); });
-
                 const unsubLogs = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_activity")
                     .orderBy('timestamp', 'desc').limit(50).onSnapshot(snap => setLogs(snap.docs.map(d => d.data())));
-
                 return () => { unsubTasks(); unsubLogs(); }
             }, []);
 
@@ -460,10 +500,15 @@
                 link.click();
             };
 
-            const toggleColVisibility = (id) => setHiddenCols(p => p.includes(id) ? p.filter(c => c !== id) : [...p, id]);
+            const toggleColVisibility = (id) => {
+                setHiddenCols(p => {
+                    const newHidden = p.includes(id) ? p.filter(c => c !== id) : [...p, id];
+                    localStorage.setItem('qc_hidden_cols_v15', JSON.stringify(newHidden));
+                    return newHidden;
+                });
+            };
             const visibleColOrder = colOrder.filter(id => !hiddenCols.includes(id));
 
-            // Smooth Resizer
             const attachResizer = (e, colId) => {
                 e.preventDefault(); e.stopPropagation();
                 const th = e.target.closest('th');
@@ -475,30 +520,38 @@
                 };
                 const onMouseUp = () => {
                     const fw = th.getBoundingClientRect().width;
-                    setColWidths(p => { const u = {...p, [colId]: fw}; localStorage.setItem('qc_col_widths_v11', JSON.stringify(u)); return u; });
+                    setColWidths(p => { const u = {...p, [colId]: fw}; localStorage.setItem('qc_col_widths_v15', JSON.stringify(u)); return u; });
                     document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
                     th.style.width = ''; th.style.minWidth = ''; 
                 };
                 document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
             };
 
+            const isDateEmpty = (val) => {
+                if (!val) return true;
+                const s = String(val).trim().toLowerCase();
+                return s === '' || s === '-' || s === 'n/a' || s === 'tbd' || s === 'none' || s === 'null' || s === 'undefined';
+            };
+
             const filteredAndSortedTasks = useMemo(() => {
                 const today = new Date().toISOString().split('T')[0];
                 let res = tasks.filter(t => {
                     const mS = searchTerm === '' || Object.values(t).some(v => String(v).toLowerCase().includes(searchTerm.toLowerCase()));
-                    const mY = filterYear === 'All' || String(t.year) === String(filterYear);
-                    const mO = filterOwner === 'All' || t.owner === filterOwner;
-                    const mST = filterStatus === 'All' || t.status === filterStatus;
-                    const mT = filterType === 'All' || t.type === filterType;
+                    const mY = filterYears.length === 0 || filterYears.includes(String(t.year));
+                    const mO = filterOwners.length === 0 || filterOwners.includes(t.owner);
+                    const mST = filterStatuses.length === 0 || filterStatuses.includes(t.status);
+                    const mT = filterTypes.length === 0 || filterTypes.includes(t.type);
+                    
                     const isO = t.status?.toLowerCase() !== 'completed' && t.dueTarget && t.dueTarget < today;
                     const mOvr = !filterOverdue || isO;
+                    const mDue = !excludeEmptyDue || !isDateEmpty(t.dueTarget); 
                     
-                    const tMo = filterMonth === 'All' || 
-                        (t.dueTarget && t.dueTarget.substring(5,7) === filterMonth) || 
-                        (t.completedDate && t.completedDate.substring(5,7) === filterMonth) || 
-                        (t.inputDate && t.inputDate.substring(5,7) === filterMonth);
+                    const tMo = filterMonths.length === 0 || 
+                        (t.dueTarget && filterMonths.includes(t.dueTarget.substring(5,7))) || 
+                        (t.completedDate && filterMonths.includes(t.completedDate.substring(5,7))) || 
+                        (t.inputDate && filterMonths.includes(t.inputDate.substring(5,7)));
 
-                    return mS && mY && mO && mST && mT && mOvr && tMo;
+                    return mS && mY && mO && mST && mT && mOvr && tMo && mDue;
                 });
                 
                 if (sortConfig.key) {
@@ -510,7 +563,7 @@
                     });
                 }
                 return res;
-            }, [tasks, searchTerm, filterYear, filterMonth, filterOwner, filterStatus, filterType, filterOverdue, sortConfig]);
+            }, [tasks, searchTerm, filterYears, filterMonths, filterOwners, filterStatuses, filterTypes, filterOverdue, excludeEmptyDue, sortConfig]);
 
             const uniqueYears = useMemo(() => [...new Set(tasks.map(t => t.year))].filter(Boolean).sort(), [tasks]);
             const uniqueOwners = useMemo(() => [...new Set(tasks.map(t => t.owner))].filter(Boolean).sort(), [tasks]);
@@ -520,6 +573,47 @@
 
             const existingRefNos = useMemo(() => new Set(tasks.map(t => t.refNo).filter(Boolean)), [tasks]);
             const overlappingCount = importPreview ? importPreview.filter(r => r.refNo && existingRefNos.has(r.refNo)).length : 0;
+
+            // Helper สร้างปุ่ม Multi-select Dropdown
+            const renderFilterDropdown = (id, label, options, selectedArr, setArr, icon = null) => {
+                const isOpen = activeDropdown === id;
+                const toggle = (val) => {
+                    if (selectedArr.includes(val)) setArr(selectedArr.filter(v => v !== val));
+                    else setArr([...selectedArr, val]);
+                };
+                const displayLabel = selectedArr.length === 0 ? `${label}: All` : `${label}: ${selectedArr.length}`;
+                const isActive = selectedArr.length > 0;
+
+                return (
+                    <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+                        <button 
+                            onClick={() => setActiveDropdown(isOpen ? null : id)} 
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] md:text-[11px] font-bold outline-none transition-all ${isActive ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400' : 'bg-white dark:bg-slate-800 border-transparent dark:border-slate-700 text-slate-700 dark:text-white hover:border-slate-300'}`}
+                        >
+                            {icon}
+                            {displayLabel}
+                        </button>
+                        {isOpen && (
+                            <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl p-3 z-50 animate-in fade-in">
+                                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                    {options.map(opt => {
+                                        const val = typeof opt === 'object' ? opt.v : opt;
+                                        const name = typeof opt === 'object' ? opt.n : opt;
+                                        const checked = selectedArr.includes(String(val));
+                                        return (
+                                            <label key={val} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer" onClick={e => e.stopPropagation()}>
+                                                <input type="checkbox" checked={checked} onChange={() => toggle(String(val))} className="w-4 h-4 rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500" />
+                                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{name}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                {isActive && <button onClick={() => setArr([])} className="w-full mt-2 pt-2 border-t dark:border-slate-700 text-[10px] text-rose-500 hover:text-rose-600 font-bold text-center uppercase tracking-widest transition-colors">Clear All</button>}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
 
             if (loading) return <IconLoader />;
 
@@ -548,9 +642,8 @@
             );
 
             return (
-                <div className="flex flex-col md:flex-row h-dvh w-full bg-[#f8fafc] dark:bg-[#0f172a] transition-colors duration-300" onClick={() => { if(showColMenu) setShowColMenu(false); if(showMobileProfile) setShowMobileProfile(false); }}>
+                <div className="flex flex-col md:flex-row h-dvh w-full bg-[#f8fafc] dark:bg-[#0f172a] transition-colors duration-300" onClick={() => { setActiveDropdown(null); if(showMobileProfile) setShowMobileProfile(false); }}>
                     
-                    {/* DESKTOP SIDEBAR */}
                     <aside className="hidden md:flex w-72 bg-white dark:bg-[#0f172a] border-r dark:border-slate-800 flex-col z-50">
                         <div className="p-8 font-black text-2xl italic text-blue-600 tracking-tighter uppercase">QC TRACKING</div>
                         <nav className="flex-1 px-4 space-y-2">
@@ -571,26 +664,16 @@
                         </div>
                     </aside>
 
-                    {/* MAIN CONTENT */}
                     <main className="flex-1 flex flex-col overflow-hidden relative pb-16 md:pb-0">
-                        
-                        {/* HEADER & FILTERS */}
                         <header className="glass-morphism border-b dark:border-slate-800 z-40 px-4 md:px-10 py-4 md:py-6 transition-colors">
                             <div className="flex items-start md:items-center justify-between mb-4 flex-col md:flex-row gap-4">
                                 <h1 className="text-xl md:text-2xl font-black dark:text-white capitalize tracking-tighter">{currentView} Interface</h1>
                                 <div className="flex gap-2 w-full md:w-auto overflow-x-auto hide-scroll pb-1 md:pb-0 shrink-0">
                                     <button onClick={() => { setCurrentTask(emptyForm); setIsEditing(false); setIsModalOpen(true); }} className="bg-blue-600 text-white px-4 md:px-8 py-2 md:py-3 rounded-full font-black text-[10px] md:text-xs shadow-lg flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all shrink-0">
-                                        <Icons.Plus /> 
-                                        <span className="hidden sm:inline">ADD TASK</span>
-                                        <span className="sm:hidden">NEW</span>
+                                        <Icons.Plus /> <span className="hidden sm:inline">ADD TASK</span><span className="sm:hidden">NEW</span>
                                     </button>
-                                    <button onClick={() => fileInputRef.current?.click()} className="p-2 md:p-3 bg-white dark:bg-slate-800 rounded-full border dark:border-slate-700 shadow-sm hover:bg-slate-50 transition-all dark:text-white shrink-0">
-                                        <Icons.Upload />
-                                    </button>
-                                    <button onClick={handleExportCSV} className="flex md:hidden items-center gap-1.5 px-4 py-2 rounded-full text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 text-[10px] font-black shrink-0">
-                                        <Icons.Download /> 
-                                        <span className="hidden sm:inline">EXPORT</span>
-                                    </button>
+                                    <button onClick={() => fileInputRef.current?.click()} className="p-2 md:p-3 bg-white dark:bg-slate-800 rounded-full border dark:border-slate-700 shadow-sm hover:bg-slate-50 transition-all dark:text-white shrink-0"><Icons.Upload /></button>
+                                    <button onClick={handleExportCSV} className="flex md:hidden items-center gap-1.5 px-4 py-2 rounded-full text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 text-[10px] font-black shrink-0"><Icons.Download /> <span className="hidden sm:inline">EXPORT</span></button>
                                     <input type="file" className="hidden" ref={fileInputRef} onChange={e => {
                                         const f = e.target.files[0]; if(!f) return;
                                         const r = new FileReader(); r.readAsArrayBuffer(f);
@@ -598,50 +681,64 @@
                                             const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
                                             const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
                                             setImportPreview(json.map(x => ({
-                                                year: x['Year'] || '', refNo: x['Ref No.'] || '', type: x['Type'] || '', description: x['Description'] || '', assignment: x['Assignment'] || '', dueTarget: x['Due/Target'] || '', completedDate: x['Completed date'] || '', owner: x['Owner'] || '', status: x['Status'] || 'Pending', remark: x['Remark'] || ''
+                                                year: x['Year'] || '', refNo: x['Ref No.'] || '', type: x['Type'] || '', 
+                                                description: x['Description'] || '', assignment: x['Assignment'] || '', 
+                                                dueTarget: x['Due/Target'] || '', completedDate: x['Completed date'] || '', 
+                                                owner: x['Owner'] || '', status: x['Status'] || 'Pending', 
+                                                remark: x['Remark'] || '', noOfDocument: parseInt(x['No.of Document']) || parseInt(x['noOfDocument']) || 0
                                             })));
                                         };
                                     }} />
                                 </div>
                             </div>
 
-                            {/* Filters Bar (Scrollable horizontally on mobile) */}
                             <div className="flex flex-nowrap md:flex-wrap items-center gap-2 md:gap-3 pt-3 border-t dark:border-slate-800 transition-colors overflow-x-auto hide-scroll pb-2">
                                 <div className="relative group shrink-0">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none"><Icons.Search /></div>
                                     <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="bg-slate-50 dark:bg-slate-900 py-2 pl-9 pr-4 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 w-36 md:w-48 dark:text-white transition-all border dark:border-slate-700" />
                                 </div>
-                                <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 dark:text-white"><option value="All">Year: All</option>{uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}</select>
-                                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 dark:text-white"><option value="All">Month: All</option>{monthList.map(m => <option key={m.v} value={m.v}>{m.n}</option>)}</select>
-                                <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 max-w-[100px] md:max-w-[130px] dark:text-white"><option value="All">Owner: All</option>{uniqueOwners.map(o => <option key={o} value={o}>{o}</option>)}</select>
-                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 dark:text-white"><option value="All">Status: All</option>{uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-2 md:px-3 py-2 text-[10px] md:text-[11px] font-bold outline-none shrink-0 dark:text-white"><option value="All">Type: All</option>{uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                                
+                                {/* ✅ Multi-Select Filters ทั้งหมดเปลี่ยนเป็น Checkbox Dropdown แล้ว! */}
+                                {renderFilterDropdown('year', 'Years', uniqueYears, filterYears, setFilterYears, <Icons.Calendar />)}
+                                {renderFilterDropdown('month', 'Months', monthList, filterMonths, setFilterMonths)}
+                                {renderFilterDropdown('owner', 'Owners', uniqueOwners, filterOwners, setFilterOwners)}
+                                {renderFilterDropdown('status', 'Statuses', uniqueStatuses, filterStatuses, setFilterStatuses)}
+                                {renderFilterDropdown('type', 'Types', uniqueTypes, filterTypes, setFilterTypes)}
+                                
+                                <button onClick={() => setExcludeEmptyDue(!excludeEmptyDue)} className={`px-3 py-2 rounded-xl text-[10px] md:text-[11px] font-black border transition-all shrink-0 ${excludeEmptyDue ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white dark:bg-slate-800 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600'}`}>
+                                    {excludeEmptyDue ? '🎯 HAS DUE ONLY' : '📅 SHOW ALL'}
+                                </button>
+                                
                                 <button onClick={() => setFilterOverdue(!filterOverdue)} className={`px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-[11px] font-black transition-all border shrink-0 ${filterOverdue ? 'bg-rose-500 text-white border-rose-500 shadow-md' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 border-rose-100 dark:border-rose-900/50 hover:bg-rose-500 hover:text-white'}`}>{filterOverdue ? '🔥 OVERDUE' : 'SHOW OVERDUE'}</button>
                                 
-                                {(searchTerm || filterYear !== 'All' || filterMonth !== 'All' || filterOwner !== 'All' || filterStatus !== 'All' || filterType !== 'All' || filterOverdue) && (
-                                    <button onClick={() => { setSearchTerm(''); setFilterYear('All'); setFilterMonth('All'); setFilterOwner('All'); setFilterStatus('All'); setFilterType('All'); setFilterOverdue(false); }} className="text-[10px] font-black text-slate-400 uppercase shrink-0 px-2">Clear</button>
+                                {(searchTerm || filterYears.length > 0 || filterMonths.length > 0 || filterOwners.length > 0 || filterStatuses.length > 0 || filterTypes.length > 0 || filterOverdue || excludeEmptyDue) && (
+                                    <button onClick={() => { setSearchTerm(''); setFilterYears([]); setFilterMonths([]); setFilterOwners([]); setFilterStatuses([]); setFilterTypes([]); setFilterOverdue(false); setExcludeEmptyDue(false); }} className="text-[10px] font-black text-slate-400 uppercase shrink-0 px-2 hover:text-slate-600 transition-colors">Clear</button>
                                 )}
                                 
                                 <div className="ml-auto hidden md:flex items-center gap-2 shrink-0">
                                     <select value={fontSize} onChange={e => setFontSize(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2 text-[11px] font-bold outline-none dark:text-white">
                                         <option value="text-[10px]">Font: Small</option><option value="text-xs">Font: Medium</option><option value="text-sm">Font: Large</option>
                                     </select>
+                                    
+                                    {/* ✅ ระบบจัดการคอลัมน์ใหม่ คลิกติด 100% พร้อม Reset ปุ่ม */}
                                     <div className="relative" onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => setShowColMenu(!showColMenu)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-slate-500 bg-white dark:bg-slate-800 border dark:border-slate-700 text-[11px] font-black tracking-widest"><Icons.View /> COLUMNS</button>
-                                        {showColMenu && (
+                                        <button onClick={() => setActiveDropdown(activeDropdown === 'columns' ? null : 'columns')} className="flex items-center gap-2 px-4 py-2 rounded-xl text-slate-500 bg-white dark:bg-slate-800 border dark:border-slate-700 text-[11px] font-black tracking-widest"><Icons.View /> COLUMNS ({visibleColOrder.length}/{initialColumns.length})</button>
+                                        {activeDropdown === 'columns' && (
                                             <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-2xl p-4 z-50 animate-in fade-in">
                                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 border-b dark:border-slate-700 pb-2">Toggle Visibility</p>
                                                 <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
                                                     {initialColumns.map(col => (
-                                                        <label key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl cursor-pointer">
-                                                            <input type="checkbox" checked={!hiddenCols.includes(col.id)} onChange={() => toggleColVisibility(col.id)} className="w-4 h-4 text-blue-600 rounded" />
-                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{col.label}</span>
-                                                        </label>
+                                                        <div key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleColVisibility(col.id); }}>
+                                                            <input type="checkbox" checked={!hiddenCols.includes(col.id)} readOnly className="w-4 h-4 text-blue-600 rounded pointer-events-none" />
+                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 pointer-events-none">{col.label}</span>
+                                                        </div>
                                                     ))}
                                                 </div>
+                                                <button onClick={() => { setHiddenCols([]); setColOrder(initialColumns.map(c=>c.id)); localStorage.removeItem('qc_hidden_cols_v15'); localStorage.removeItem('qc_col_order_v15'); }} className="w-full mt-3 pt-3 border-t dark:border-slate-700 text-[10px] text-blue-500 hover:text-blue-600 font-bold text-center uppercase tracking-widest transition-colors">Reset Default</button>
                                             </div>
                                         )}
                                     </div>
+
                                     <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 rounded-xl text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 text-[11px] font-black tracking-widest hover:bg-blue-600 hover:text-white transition-all"><Icons.Download /> EXPORT</button>
                                 </div>
                             </div>
@@ -655,27 +752,30 @@
                                     {Object.keys(pendingEdits).length > 0 && (
                                         <div className="bg-amber-50 dark:bg-amber-900/20 p-3 md:p-4 rounded-2xl md:rounded-3xl flex items-center justify-between shadow-xl border border-amber-200 dark:border-amber-900/50 flex-wrap gap-2">
                                             <div className="flex items-center gap-2 md:gap-3"><span className="px-2 py-1 md:px-3 md:py-1 bg-amber-500 text-white rounded-full font-black text-xs animate-pulse">{Object.keys(pendingEdits).length}</span><p className="font-bold text-amber-800 dark:text-amber-200 uppercase tracking-widest text-[9px] md:text-[10px]">Unsaved changes</p></div>
-                                            <div className="flex gap-2"><button onClick={() => setPendingEdits({})} className="px-3 md:px-5 py-2 text-slate-500 font-bold uppercase text-[10px] md:text-xs">Discard</button><button onClick={saveInline} className="px-4 md:px-8 py-2 bg-amber-500 text-white font-black rounded-full shadow-lg flex items-center gap-2 text-[10px] md:text-xs"><Icons.Save /> SAVE</button></div>
+                                            <div className="flex gap-2"><button onClick={() => setPendingEdits({})} className="px-3 md:px-5 py-2 text-slate-500 font-bold uppercase text-[10px] md:text-xs hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-xl transition-colors">Discard</button><button onClick={saveInline} className="px-4 md:px-8 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-full shadow-lg flex items-center gap-2 text-[10px] md:text-xs transition-colors"><Icons.Save /> SAVE</button></div>
                                         </div>
                                     )}
-                                    {/* Mobile Column Toggle (Visible only on small screens) */}
+
+                                    {/* Mobile Column Toggle */}
                                     <div className="md:hidden flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border dark:border-slate-700">
                                         <div className="relative w-full" onClick={e => e.stopPropagation()}>
-                                            <button onClick={() => setShowColMenu(!showColMenu)} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 text-xs font-bold"><Icons.View /> Manage Columns</button>
-                                            {showColMenu && (
+                                            <button onClick={() => setActiveDropdown(activeDropdown === 'columns' ? null : 'columns')} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 text-xs font-bold"><Icons.View /> Manage Columns ({visibleColOrder.length})</button>
+                                            {activeDropdown === 'columns' && (
                                                 <div className="absolute left-0 mt-2 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl p-4 z-50">
                                                     <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                                                         {initialColumns.map(col => (
-                                                            <label key={col.id} className="flex items-center gap-2 p-1">
-                                                                <input type="checkbox" checked={!hiddenCols.includes(col.id)} onChange={() => toggleColVisibility(col.id)} className="w-4 h-4" />
-                                                                <span className="text-[10px] font-bold dark:text-white truncate">{col.label}</span>
-                                                            </label>
+                                                            <div key={col.id} className="flex items-center gap-2 p-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleColVisibility(col.id); }}>
+                                                                <input type="checkbox" checked={!hiddenCols.includes(col.id)} readOnly className="w-4 h-4 text-blue-600 rounded pointer-events-none" />
+                                                                <span className="text-[10px] font-bold dark:text-white truncate pointer-events-none">{col.label}</span>
+                                                            </div>
                                                         ))}
                                                     </div>
+                                                    <button onClick={() => { setHiddenCols([]); setColOrder(initialColumns.map(c=>c.id)); localStorage.removeItem('qc_hidden_cols_v15'); localStorage.removeItem('qc_col_order_v15'); }} className="w-full mt-3 pt-3 border-t dark:border-slate-700 text-[10px] text-blue-500 hover:text-blue-600 font-bold text-center uppercase tracking-widest transition-colors">Reset Default</button>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
+
                                     <div className="bg-white dark:bg-slate-800 rounded-2xl md:rounded-[3rem] shadow-soft border dark:border-slate-700/50 overflow-hidden flex-1 flex flex-col relative pb-8 md:pb-0">
                                         <div className="overflow-x-auto custom-scrollbar flex-1">
                                             <table className={`w-full text-left border-separate border-spacing-0 table-fixed transition-colors ${fontSize}`}>
@@ -684,7 +784,7 @@
                                                         {visibleColOrder.map(colId => {
                                                             const col = initialColumns.find(c => c.id === colId);
                                                             return (
-                                                                <th key={colId} style={{ width: colWidths[colId] }} className="px-4 py-4 md:px-8 md:py-6 text-[9px] md:text-[10px] font-black uppercase tracking-wider md:tracking-widest text-slate-400 relative group bg-slate-50 dark:bg-slate-900" draggable onDragStart={(e) => e.dataTransfer.setData("colId", colId)} onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('column-drag-target'); }} onDragLeave={e => e.currentTarget.classList.remove('column-drag-target')} onDrop={e => { e.currentTarget.classList.remove('column-drag-target'); const sId = e.dataTransfer.getData("colId"); if(sId === colId) return; const nO = [...colOrder]; const sIdx = nO.indexOf(sId); const tIdx = nO.indexOf(colId); nO.splice(sIdx, 1); nO.splice(tIdx, 0, sId); setColOrder(nO); localStorage.setItem('qc_col_order_v11', JSON.stringify(nO)); }}>
+                                                                <th key={colId} style={{ width: colWidths[colId] }} className="px-4 py-4 md:px-8 md:py-6 text-[9px] md:text-[10px] font-black uppercase tracking-wider md:tracking-widest text-slate-400 relative group bg-slate-50 dark:bg-slate-900" draggable onDragStart={(e) => e.dataTransfer.setData("colId", colId)} onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('column-drag-target'); }} onDragLeave={e => e.currentTarget.classList.remove('column-drag-target')} onDrop={e => { e.currentTarget.classList.remove('column-drag-target'); const sId = e.dataTransfer.getData("colId"); if(sId === colId) return; const nO = [...colOrder]; const sIdx = nO.indexOf(sId); const tIdx = nO.indexOf(colId); nO.splice(sIdx, 1); nO.splice(tIdx, 0, sId); setColOrder(nO); localStorage.setItem('qc_col_order_v15', JSON.stringify(nO)); }}>
                                                                     <div className="flex items-center gap-1 md:gap-2 cursor-pointer hover:text-blue-500 transition-all" onClick={() => setSortConfig({ key: colId, direction: sortConfig.key === colId && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>{col.label} <Icons.Sort dir={sortConfig.key === colId ? sortConfig.direction : null} /></div>
                                                                     <div className="resizer" onMouseDown={e => attachResizer(e, colId)} onTouchStart={e => attachResizer(e, colId)} />
                                                                 </th>
@@ -705,8 +805,27 @@
                                                                         if (colId === 'status') return (
                                                                             <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><select value={cD.status} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, status: e.target.value}}))} className={`px-2 py-1 md:px-4 md:py-2 rounded-full font-black uppercase border-0 shadow-sm outline-none cursor-pointer tracking-wider w-full ${getStatusStyles(cD.status)} ${fontSize}`}><option value="Completed">Completed</option><option value="On progress">On progress</option><option value="Pending">Pending</option><option value="Cancelled">Cancelled</option></select></td>
                                                                         );
+                                                                        if (colId === 'noOfDocument') return (
+                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><input type="number" min="0" value={cD[colId] || 0} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: parseInt(e.target.value) || 0}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'font-black text-blue-600 dark:text-blue-400'} ${fontSize}`} /></td>
+                                                                        );
+                                                                        if (colId.includes('Date') || colId === 'dueTarget') {
+                                                                            const hasVal = !isDateEmpty(cD[colId]);
+                                                                            return (
+                                                                                <td key={colId} className="px-4 md:px-8 py-3 md:py-5">
+                                                                                    <input 
+                                                                                        type={hasVal ? 'date' : 'text'} 
+                                                                                        onFocus={e => e.target.type = 'date'}
+                                                                                        onBlur={e => { if(!e.target.value) e.target.type = 'text'; }}
+                                                                                        placeholder="-"
+                                                                                        value={hasVal ? cD[colId] : ''} 
+                                                                                        onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} 
+                                                                                        className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} 
+                                                                                    />
+                                                                                </td>
+                                                                            );
+                                                                        }
                                                                         return (
-                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><input type={colId.includes('Date') || colId === 'dueTarget' ? 'date' : 'text'} value={cD[colId] || ''} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} /></td>
+                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><input type="text" value={cD[colId] || ''} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} /></td>
                                                                         );
                                                                     })}
                                                                 </tr>
@@ -722,10 +841,9 @@
                         </div>
                     </main>
 
-                    {/* MOBILE BOTTOM NAVIGATION */}
                     <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t dark:border-slate-800 z-50 flex justify-around items-center px-2 py-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
                         {[ { id: 'dashboard', label: 'Overview', icon: <Icons.Dashboard /> }, { id: 'tasks', label: 'Projects', icon: <Icons.Tasks /> }, { id: 'activity', label: 'History', icon: <Icons.Activity /> } ].map(item => (
-                            <button key={item.id} onClick={() => {setCurrentView(item.id); setShowMobileProfile(false);}} className={`flex flex-col items-center gap-1 p-2 w-16 rounded-xl transition-all ${currentView === item.id && !showMobileProfile ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <button key={item.id} onClick={() => {setCurrentView(item.id); setShowMobileProfile(false); setActiveDropdown(null);}} className={`flex flex-col items-center gap-1 p-2 w-16 rounded-xl transition-all ${currentView === item.id && !showMobileProfile ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
                                 {item.icon} <span className="text-[9px] font-bold">{item.label}</span>
                             </button>
                         ))}
@@ -734,7 +852,6 @@
                         </button>
                     </nav>
 
-                    {/* MOBILE PROFILE DRAWER */}
                     {showMobileProfile && (
                         <div className="md:hidden fixed bottom-20 left-4 right-4 bg-white dark:bg-slate-800 rounded-3xl shadow-premium border dark:border-slate-700 p-6 z-50 animate-in slide-in-from-bottom-10">
                             <div className="flex items-center gap-4 mb-6 pb-4 border-b dark:border-slate-700">
@@ -748,7 +865,6 @@
                         </div>
                     )}
 
-                    {/* MODAL: ADD/EDIT */}
                     {isModalOpen && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-slate-950/70 backdrop-blur-md animate-in fade-in">
                             <div className="bg-white dark:bg-slate-800 rounded-[2rem] md:rounded-[4rem] shadow-premium w-full max-w-5xl max-h-[85vh] md:max-h-[92vh] flex flex-col overflow-hidden border dark:border-slate-700">
@@ -763,12 +879,13 @@
                                         ))}
                                     </div>
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Ref No.</label><input type="text" value={currentTask.refNo} onChange={e => setCurrentTask({...currentTask, refNo: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-blue-600 ml-3">No. of Document</label><input type="number" min="0" value={currentTask.noOfDocument || 0} onChange={e => setCurrentTask({...currentTask, noOfDocument: parseInt(e.target.value) || 0})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-blue-50/50 dark:bg-blue-900/20 border-2 border-blue-100 dark:border-blue-900/50 focus:ring-2 focus:ring-blue-500 font-black text-lg text-blue-600 dark:text-blue-400 outline-none shadow-inner" /></div>
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Category (Type)</label><input type="text" value={currentTask.type} onChange={e => setCurrentTask({...currentTask, type: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Fiscal Year</label><input type="text" value={currentTask.year} onChange={e => setCurrentTask({...currentTask, year: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
                                     <div className="col-span-full space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Scope Description</label><textarea rows="2" value={currentTask.description} onChange={e => setCurrentTask({...currentTask, description: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-medium dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
                                     <div className="col-span-full space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Lead Assignment</label><textarea rows="2" value={currentTask.assignment} onChange={e => setCurrentTask({...currentTask, assignment: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-medium dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
-                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-rose-500 ml-3">Target Due Date</label><input type="date" value={currentTask.dueTarget} onChange={e => setCurrentTask({...currentTask, dueTarget: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-rose-500/50 font-bold dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
-                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-emerald-500 ml-3">Completed Date</label><input type="date" value={currentTask.completedDate} onChange={e => setCurrentTask({...currentTask, completedDate: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-emerald-500/50 font-bold dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-rose-500 ml-3">Target Due Date</label><input type={!isDateEmpty(currentTask.dueTarget) ? 'date' : 'text'} onFocus={e => e.target.type='date'} onBlur={e => {if(!e.target.value) e.target.type='text'}} placeholder="Not specified" value={!isDateEmpty(currentTask.dueTarget) ? currentTask.dueTarget : ''} onChange={e => setCurrentTask({...currentTask, dueTarget: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-rose-500/50 font-bold dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
+                                    <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-emerald-500 ml-3">Completed Date</label><input type={!isDateEmpty(currentTask.completedDate) ? 'date' : 'text'} onFocus={e => e.target.type='date'} onBlur={e => {if(!e.target.value) e.target.type='text'}} placeholder="Not specified" value={!isDateEmpty(currentTask.completedDate) ? currentTask.completedDate : ''} onChange={e => setCurrentTask({...currentTask, completedDate: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-emerald-500/50 font-bold dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Owner / PIC</label><input type="text" value={currentTask.owner} onChange={e => setCurrentTask({...currentTask, owner: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
                                     <div className="col-span-full space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Remarks</label><input type="text" value={currentTask.remark} onChange={e => setCurrentTask({...currentTask, remark: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
                                 </div>
@@ -782,7 +899,6 @@
                         </div>
                     )}
 
-                    {/* IMPORT MODAL */}
                     {importPreview && (
                         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
                             <div className="bg-white dark:bg-slate-800 rounded-[2rem] md:rounded-[4rem] w-full max-w-4xl p-6 md:p-12 shadow-premium flex flex-col max-h-[85vh] border dark:border-slate-700">
@@ -802,11 +918,11 @@
                                 <div className="flex-1 overflow-y-auto custom-scrollbar border dark:border-slate-700 rounded-[1.5rem] md:rounded-[2.5rem] mb-6 md:mb-10 shadow-inner bg-slate-50 dark:bg-slate-900/30">
                                     <table className="w-full text-[10px] md:text-xs text-left">
                                         <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0">
-                                            <tr><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400">Ref ID</th><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400">Owner</th><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400 text-right">Status</th></tr>
+                                            <tr><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400">Ref ID</th><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400">Docs</th><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400">Owner</th><th className="px-4 md:px-6 py-3 md:py-4 font-black text-slate-400 text-right">Status</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-slate-700/50">
                                             {importPreview.slice(0, 50).map((r, i) => (
-                                                <tr key={i}><td className="px-4 md:px-6 py-3 font-bold dark:text-slate-200">{r.refNo || 'N/A'}</td><td className="px-4 md:px-6 py-3 text-slate-500 truncate max-w-[100px] md:max-w-none">{r.owner}</td><td className="px-4 md:px-6 py-3 text-slate-400 uppercase font-black text-right">{r.status}</td></tr>
+                                                <tr key={i}><td className="px-4 md:px-6 py-3 font-bold dark:text-slate-200">{r.refNo || 'N/A'}</td><td className="px-4 md:px-6 py-3 text-blue-600 font-black">{r.noOfDocument}</td><td className="px-4 md:px-6 py-3 text-slate-500 truncate max-w-[100px] md:max-w-none">{r.owner}</td><td className="px-4 md:px-6 py-3 text-slate-400 uppercase font-black text-right">{r.status}</td></tr>
                                             ))}
                                         </tbody>
                                     </table>
