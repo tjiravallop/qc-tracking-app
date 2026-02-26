@@ -51,6 +51,16 @@
         .h-dvh { height: 100dvh; }
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .cell-transition {
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                        max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                        min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                        opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body class="bg-[#f8fafc] dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 overflow-hidden text-sm">
@@ -58,6 +68,11 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
+
+        const safeStorageGet = (key, fallback) => {
+            try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : fallback; } catch (e) { return fallback; }
+        };
+        const safeStorageSet = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} };
 
         const USER_PINS = { "2098": "Thanachot J.", "0843": "Sangdao T.", "2149": "Vinit R.", "9999": "Admin" };
         const emptyForm = { year: '', inputDate: '', refNo: '', type: '', description: '', assignment: '', documentRevised: '', effectiveDate: '', dueTarget: '', completedDate: '', owner: '', status: 'On progress', remark: '', noOfDocument: 0 };
@@ -112,20 +127,10 @@
 
         const getChangesDetail = (oldData, newData) => {
             const changes = [];
-            const fieldsToWatch = { 
-                status: 'Status', refNo: 'Ref No.', type: 'Type', year: 'Year',
-                description: 'Description', assignment: 'Assignment', 
-                dueTarget: 'Due', completedDate: 'Completed', owner: 'Owner', remark: 'Remark',
-                noOfDocument: 'No. of Doc'
-            };
+            const fieldsToWatch = { status: 'Status', refNo: 'Ref No.', type: 'Type', year: 'Year', description: 'Description', assignment: 'Assignment', dueTarget: 'Due', completedDate: 'Completed', owner: 'Owner', remark: 'Remark', noOfDocument: 'No. of Doc' };
             for(let key in fieldsToWatch) {
-                const oldV = String(oldData[key] || '').trim();
-                const newV = String(newData[key] || '').trim();
-                if(oldV !== newV) {
-                    const shortOld = oldV.length > 20 ? oldV.substring(0, 20) + '...' : oldV;
-                    const shortNew = newV.length > 20 ? newV.substring(0, 20) + '...' : newV;
-                    changes.push(`${fieldsToWatch[key]}: '${shortOld}' ➔ '${shortNew}'`);
-                }
+                const oldV = String(oldData[key] || '').trim(); const newV = String(newData[key] || '').trim();
+                if(oldV !== newV) changes.push(`${fieldsToWatch[key]}: '${oldV.length > 20 ? oldV.substring(0, 20) + '...' : oldV}' ➔ '${newV.length > 20 ? newV.substring(0, 20) + '...' : newV}'`);
             }
             return changes.join(' | ');
         };
@@ -141,12 +146,11 @@
         };
 
         const currentAppId = 'qc-tracking-app';
-        let dbInst, authInst;
+        let dbInst = null, authInst = null;
         try {
-            const app = firebase.initializeApp(firebaseConfig);
-            dbInst = firebase.firestore();
-            authInst = firebase.auth();
-        } catch(e) {}
+            if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+            dbInst = firebase.firestore(); authInst = firebase.auth();
+        } catch(e) { console.error("Firebase Init Error:", e); }
 
         const IconLoader = () => (
             <div className="h-dvh flex items-center justify-center bg-slate-50 dark:bg-slate-900 flex-col px-4 text-center">
@@ -163,172 +167,66 @@
         );
 
         const ChartComp = ({ type, data, options, isDark }) => {
-            const chartRef = useRef(null);
-            const canvasRef = useRef(null);
+            const chartRef = useRef(null); const canvasRef = useRef(null);
             useEffect(() => {
                 if (chartRef.current) chartRef.current.destroy();
                 if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
                 const ctx = canvasRef.current.getContext('2d');
-                
-                const defaultDataLabels = {
-                    color: type === 'doughnut' ? '#fff' : (isDark ? '#e2e8f0' : '#475569'),
-                    font: { weight: 'bold', size: 10 },
-                    display: (context) => context.dataset.data[context.dataIndex] > 0
-                };
+                const defaultDataLabels = { color: type === 'doughnut' ? '#fff' : (isDark ? '#e2e8f0' : '#475569'), font: { weight: 'bold', size: 10 }, display: (context) => context.dataset.data[context.dataIndex] > 0 };
                 const mergedDataLabels = options?.plugins?.datalabels ? { ...defaultDataLabels, ...options.plugins.datalabels } : defaultDataLabels;
-
-                chartRef.current = new Chart(ctx, {
-                    type, data,
-                    options: {
-                        ...options,
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            ...options?.plugins,
-                            datalabels: mergedDataLabels,
-                            tooltip: { backgroundColor: isDark ? '#1e293b' : '#fff', titleColor: isDark ? '#fff' : '#000', bodyColor: isDark ? '#94a3b8' : '#475569', borderColor: isDark ? '#334155' : '#e2e8f0', borderWidth: 1 }
-                        }
-                    }
-                });
+                chartRef.current = new Chart(ctx, { type, data, options: { ...options, responsive: true, maintainAspectRatio: false, plugins: { ...options?.plugins, datalabels: mergedDataLabels, tooltip: { backgroundColor: isDark ? '#1e293b' : '#fff', titleColor: isDark ? '#fff' : '#000', bodyColor: isDark ? '#94a3b8' : '#475569', borderColor: isDark ? '#334155' : '#e2e8f0', borderWidth: 1 } } } });
             }, [data, isDark, type, options]);
             return <canvas ref={canvasRef} />;
         };
 
         const DashboardView = ({ tasks, isDark }) => {
             const today = new Date().toISOString().split('T')[0];
-            
             const stats = useMemo(() => {
                 const totalTasks = tasks.length;
                 const totalDocs = tasks.reduce((sum, t) => sum + (parseInt(t.noOfDocument) || 0), 0);
-                const completedDocs = tasks.filter(t => t.status?.toLowerCase() === 'completed')
-                                          .reduce((sum, t) => sum + (parseInt(t.noOfDocument) || 0), 0);
+                const completedDocs = tasks.filter(t => t.status?.toLowerCase() === 'completed').reduce((sum, t) => sum + (parseInt(t.noOfDocument) || 0), 0);
                 const overdueTasks = tasks.filter(t => t.status?.toLowerCase() !== 'completed' && t.dueTarget && t.dueTarget < today).length;
                 const docRate = totalDocs ? Math.round((completedDocs / totalDocs) * 100) : 0;
-                
                 return { totalTasks, totalDocs, completedDocs, overdueTasks, docRate };
             }, [tasks]);
 
             const { monthKeys, labels, chart1Data, chart2Data } = useMemo(() => {
-                const getTaskMonth = (t) => {
-                    const d = t.inputDate || t.dueTarget || t.completedDate || '';
-                    if (d && d.length >= 7) return d.substring(0, 7);
-                    return 'Unknown';
-                };
+                const getTaskMonth = (t) => { const d = t.inputDate || t.dueTarget || t.completedDate || ''; return (d && typeof d === 'string' && d.length >= 7) ? d.substring(0, 7) : 'Unknown'; };
+                const getMonthLabel = (dateStr) => { if (dateStr === 'Unknown') return 'Unknown'; const parts = dateStr.split('-'); return parts.length < 2 ? dateStr : `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1], 10) - 1]} ${parts[0]}`; };
+                const mKeys = [...new Set(tasks.map(getTaskMonth))].sort(); const lbls = mKeys.map(getMonthLabel);
+                const statusColors = { 'Completed': '#22c55e', 'On progress': '#f59e0b', 'Pending': '#3b82f6', 'Cancelled': '#f43f5e' };
+                const uniqueStatuses = [...new Set(tasks.map(t => String(t.status || 'Unknown').trim()))].sort();
                 
-                const getMonthLabel = (dateStr) => {
-                    if (dateStr === 'Unknown') return 'Unknown';
-                    const parts = dateStr.split('-');
-                    if (parts.length < 2) return dateStr;
-                    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                    return `${monthNames[parseInt(parts[1], 10) - 1]} ${parts[0]}`;
-                };
-
-                const mKeys = [...new Set(tasks.map(getTaskMonth))].sort();
-                const lbls = mKeys.map(getMonthLabel);
-
-                const statusColors = {
-                    'Completed': '#22c55e', 
-                    'On progress': '#f59e0b', 
-                    'Pending': '#3b82f6', 
-                    'Cancelled': '#f43f5e', 
-                };
-                const uniqueStatuses = [...new Set(tasks.map(t => t.status || 'Unknown'))].sort();
-                
-                const c1Datasets = uniqueStatuses.map(status => {
-                    return {
-                        label: status,
-                        backgroundColor: statusColors[status] || '#94a3b8',
-                        data: mKeys.map(mk => {
-                            return tasks.filter(t => getTaskMonth(t) === mk && t.status === status)
-                                        .reduce((sum, t) => sum + (parseInt(t.noOfDocument) || 0), 0);
-                        }),
-                        borderRadius: 4
-                    };
-                });
-
+                const c1Datasets = uniqueStatuses.map(status => ({
+                    label: status, backgroundColor: statusColors[status] || '#94a3b8', borderRadius: 4,
+                    data: mKeys.map(mk => tasks.filter(t => getTaskMonth(t) === mk && String(t.status || '').trim() === status).reduce((sum, t) => sum + (parseInt(t.noOfDocument) || 0), 0))
+                }));
                 const c2Data = mKeys.map(mk => {
                     const tasksInMonth = tasks.filter(t => getTaskMonth(t) === mk);
-                    const refs = new Set(tasksInMonth.map(t => t.refNo).filter(Boolean));
+                    const refs = new Set(tasksInMonth.map(t => String(t.refNo || '').trim()).filter(Boolean));
                     return refs.size > 0 ? refs.size : tasksInMonth.length;
                 });
-
-                return {
-                    monthKeys: mKeys,
-                    labels: lbls,
-                    chart1Data: { labels: lbls, datasets: c1Datasets },
-                    chart2Data: { 
-                        labels: lbls, 
-                        datasets: [{
-                            label: 'Total Ref No. Counts',
-                            backgroundColor: '#8b5cf6', 
-                            data: c2Data,
-                            borderRadius: 6
-                        }] 
-                    }
-                };
+                return { monthKeys: mKeys, labels: lbls, chart1Data: { labels: lbls, datasets: c1Datasets }, chart2Data: { labels: lbls, datasets: [{ label: 'Total Ref No. Counts', backgroundColor: '#8b5cf6', data: c2Data, borderRadius: 6 }] } };
             }, [tasks]);
 
             return (
                 <div className="space-y-6 md:space-y-8 h-full overflow-y-auto custom-scrollbar pb-24 md:pb-10 px-2 md:px-4 fade-up">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                        {[
-                            { label: 'Doc Health', val: `${stats.docRate}%`, color: 'blue', icon: '🎯' },
-                            { label: 'Total Docs', val: stats.totalDocs, color: 'indigo', icon: '📄' },
-                            { label: 'Completed Docs', val: stats.completedDocs, color: 'emerald', icon: '✅' },
-                            { label: 'Overdue Tasks', val: stats.overdueTasks, color: 'rose', icon: '🔥' },
-                        ].map((card, i) => (
+                        {[{ label: 'Doc Health', val: `${stats.docRate}%`, color: 'blue', icon: '🎯' }, { label: 'Total Docs', val: stats.totalDocs, color: 'indigo', icon: '📄' }, { label: 'Completed Docs', val: stats.completedDocs, color: 'emerald', icon: '✅' }, { label: 'Overdue Tasks', val: stats.overdueTasks, color: 'rose', icon: '🔥' }].map((card, i) => (
                             <div key={i} className="bg-white dark:bg-slate-800 p-5 md:p-8 rounded-[1.5rem] md:rounded-[2rem] shadow-soft border border-slate-100 dark:border-slate-700 hover:shadow-premium transition-all">
-                                <div className="flex justify-between items-start mb-2 md:mb-4">
-                                    <p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest">{card.label}</p>
-                                    <span className="text-lg md:text-2xl">{card.icon}</span>
-                                </div>
+                                <div className="flex justify-between items-start mb-2 md:mb-4"><p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest">{card.label}</p><span className="text-lg md:text-2xl">{card.icon}</span></div>
                                 <h3 className="text-2xl md:text-4xl font-black dark:text-white tracking-tighter">{card.val}</h3>
                             </div>
                         ))}
                     </div>
-                    
                     <div className="grid grid-cols-1 gap-6 md:gap-8">
                         <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-[400px] md:h-[450px] flex flex-col transition-colors">
-                            <h4 className="font-black text-[12px] md:text-sm uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-4 md:mb-6 flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-                                No. of Document By Month (Separated by Status)
-                            </h4>
-                            <div className="flex-1 min-h-0">
-                                <ChartComp type="bar" data={chart1Data} options={{ 
-                                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, 
-                                    plugins: { 
-                                        legend: { position: 'top', labels: { boxWidth: 12, font: { weight: 'bold' } } },
-                                        datalabels: {
-                                            color: '#ffffff', 
-                                            font: { weight: '900', size: 16 }, 
-                                            align: 'center',
-                                            anchor: 'center',
-                                            display: (context) => context.dataset.data[context.dataIndex] > 0
-                                        }
-                                    } 
-                                }} isDark={isDark} />
-                            </div>
+                            <h4 className="font-black text-[12px] md:text-sm uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-4 md:mb-6 flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500"></span> No. of Document By Month (Separated by Status)</h4>
+                            <div className="flex-1 min-h-0"><ChartComp type="bar" data={chart1Data} options={{ scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { weight: 'bold' } } }, datalabels: { color: '#ffffff', font: { weight: '900', size: 16 }, align: 'center', anchor: 'center', display: (context) => context.dataset.data[context.dataIndex] > 0 } } }} isDark={isDark} /></div>
                         </div>
-
                         <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-[400px] md:h-[450px] flex flex-col transition-colors">
-                            <h4 className="font-black text-[12px] md:text-sm uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-4 md:mb-6 flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-purple-500"></span>
-                                Counting Ref No. By Month
-                            </h4>
-                            <div className="flex-1 min-h-0">
-                                <ChartComp type="bar" data={chart2Data} options={{ 
-                                    scales: { y: { beginAtZero: true } }, 
-                                    plugins: { 
-                                        legend: { display: false },
-                                        datalabels: {
-                                            color: isDark ? '#ffffff' : '#334155',
-                                            font: { weight: '900', size: 18 }, 
-                                            align: 'end',
-                                            anchor: 'end',
-                                            display: (context) => context.dataset.data[context.dataIndex] > 0
-                                        }
-                                    } 
-                                }} isDark={isDark} />
-                            </div>
+                            <h4 className="font-black text-[12px] md:text-sm uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-4 md:mb-6 flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-purple-500"></span> Counting Ref No. By Month</h4>
+                            <div className="flex-1 min-h-0"><ChartComp type="bar" data={chart2Data} options={{ scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false }, datalabels: { color: isDark ? '#ffffff' : '#334155', font: { weight: '900', size: 18 }, align: 'end', anchor: 'end', display: (context) => context.dataset.data[context.dataIndex] > 0 } } }} isDark={isDark} /></div>
                         </div>
                     </div>
                 </div>
@@ -339,17 +237,13 @@
             <div className="bg-white dark:bg-slate-800 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-full flex flex-col p-6 md:p-10 fade-up transition-colors">
                 <h3 className="font-black text-lg md:text-2xl mb-6 md:mb-8 flex items-center gap-3 md:gap-4 dark:text-white uppercase tracking-tighter"><span className="w-1.5 h-5 md:h-6 bg-rose-500 rounded-full"></span> INTERACTION LOG</h3>
                 <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-2 pb-20 md:pb-0">
-                    {logs.length === 0 ? <EmptyState text="Historical records empty" /> : 
+                    {logs.length === 0 ? <div className="flex flex-col items-center justify-center p-20"><div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4"><Icons.Tasks /></div><p className="text-slate-400 font-bold">No History</p></div> : 
                         logs.map((log, i) => (
                             <div key={i} className="flex items-start gap-4 md:gap-6 p-5 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700/50 hover:border-blue-500 transition-all duration-300">
                                 <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-base md:text-lg shadow-lg shadow-blue-600/20 shrink-0">{log.user?.charAt(0)}</div>
                                 <div className="flex-1">
                                     <p className="font-bold text-sm md:text-base text-slate-800 dark:text-slate-200 leading-tight">{log.user} <span className="text-slate-400 font-medium mx-1 md:mx-2 italic lowercase text-xs md:text-sm">{log.action}</span> <span className="text-blue-600 dark:text-blue-400 font-black tracking-tight">{log.target}</span></p>
-                                    {log.details && (
-                                        <div className="mt-2 text-[10px] md:text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 md:p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 inline-block font-medium break-all">
-                                            {log.details}
-                                        </div>
-                                    )}
+                                    {log.details && <div className="mt-2 text-[10px] md:text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 md:p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 inline-block font-medium break-all">{log.details}</div>}
                                     <p className="text-[9px] md:text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest opacity-60">{new Date(log.timestamp).toLocaleString()}</p>
                                 </div>
                             </div>
@@ -370,39 +264,26 @@
             const [logs, setLogs] = useState([]);
             const [loading, setLoading] = useState(true);
             const [isProcessing, setIsProcessing] = useState(false);
-            
             const [showMobileProfile, setShowMobileProfile] = useState(false);
-            const [activeDropdown, setActiveDropdown] = useState(null); // ตัวจัดการ Dropdown ป้องกันการเปิดซ้อน/ไม่ทำงาน
+            const [activeDropdown, setActiveDropdown] = useState(null); 
 
-            // Multi-Select Filters
             const [searchTerm, setSearchTerm] = useState('');
             const [filterYears, setFilterYears] = useState([]);
             const [filterMonths, setFilterMonths] = useState([]);
             const [filterOwners, setFilterOwners] = useState([]);
             const [filterStatuses, setFilterStatuses] = useState([]);
             const [filterTypes, setFilterTypes] = useState([]);
-            
             const [filterOverdue, setFilterOverdue] = useState(false);
             const [excludeEmptyDue, setExcludeEmptyDue] = useState(false); 
 
-            // Table Interface
             const [fontSize, setFontSize] = useState(localStorage.getItem('qc_table_font') || 'text-xs');
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [currentTask, setCurrentTask] = useState(emptyForm);
             const [isEditing, setIsEditing] = useState(false);
             
-            // ✅ อัปเดตเวอร์ชัน Cache เป็น v15 เพื่อบังคับรีเซ็ตคอลัมน์ใหม่ 100%
-            const [colOrder, setColOrder] = useState(() => {
-                const saved = JSON.parse(localStorage.getItem('qc_col_order_v15'));
-                if (saved && saved.length === initialColumns.length) return saved;
-                return initialColumns.map(c => c.id);
-            });
-            const [colWidths, setColWidths] = useState(() => {
-                const saved = JSON.parse(localStorage.getItem('qc_col_widths_v15'));
-                if (saved && Object.keys(saved).length === initialColumns.length) return saved;
-                return initialColumns.reduce((a, c) => ({...a, [c.id]: c.width}), {});
-            });
-            const [hiddenCols, setHiddenCols] = useState(() => JSON.parse(localStorage.getItem('qc_hidden_cols_v15')) || []);
+            const [colOrder, setColOrder] = useState(() => { const saved = safeStorageGet('qc_col_order_v16', null); return (Array.isArray(saved) && saved.length === initialColumns.length) ? saved : initialColumns.map(c => c.id); });
+            const [colWidths, setColWidths] = useState(() => { const saved = safeStorageGet('qc_col_widths_v16', null); return (saved && typeof saved === 'object') ? saved : initialColumns.reduce((a, c) => ({...a, [c.id]: c.width}), {}); });
+            const [hiddenCols, setHiddenCols] = useState(() => safeStorageGet('qc_hidden_cols_v16', []));
             const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
             const [pendingEdits, setPendingEdits] = useState({});
             
@@ -410,25 +291,42 @@
             const [importMode, setImportMode] = useState('append');
             const fileInputRef = useRef(null);
 
+            const syncUserSettings = (updates) => {
+                if (!activeUser || !dbInst) return;
+                dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_user_settings").doc(activeUser)
+                    .set(updates, { merge: true }).catch(e => console.error("Error saving layout", e));
+            };
+
+            useEffect(() => {
+                if (!activeUser || !dbInst) return;
+                const loadLayout = async () => {
+                    try {
+                        const doc = await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_user_settings").doc(activeUser).get();
+                        if (doc.exists) {
+                            const d = doc.data();
+                            if (d.hiddenCols) { setHiddenCols(d.hiddenCols); safeStorageSet('qc_hidden_cols_v16', d.hiddenCols); }
+                            if (d.colOrder) { setColOrder(d.colOrder); safeStorageSet('qc_col_order_v16', d.colOrder); }
+                            if (d.colWidths) { setColWidths(d.colWidths); safeStorageSet('qc_col_widths_v16', d.colWidths); }
+                            if (d.fontSize) { setFontSize(d.fontSize); localStorage.setItem('qc_table_font', d.fontSize); }
+                        }
+                    } catch(e) { console.error("Failed to load user layout", e); }
+                };
+                loadLayout();
+            }, [activeUser]);
+
             useEffect(() => {
                 if (!activeUser) return;
                 let timeoutId;
-                const resetTimer = () => {
-                    clearTimeout(timeoutId);
-                    timeoutId = setTimeout(() => { setActiveUser(null); sessionStorage.removeItem('qc_active_user'); }, 30 * 60 * 1000);
-                };
+                const resetTimer = () => { clearTimeout(timeoutId); timeoutId = setTimeout(() => { setActiveUser(null); sessionStorage.removeItem('qc_active_user'); }, 30 * 60 * 1000); };
                 const events = ['mousemove', 'keypress', 'click', 'scroll', 'touchstart'];
-                events.forEach(e => window.addEventListener(e, resetTimer));
-                resetTimer();
+                events.forEach(e => window.addEventListener(e, resetTimer)); resetTimer();
                 return () => { clearTimeout(timeoutId); events.forEach(e => window.removeEventListener(e, resetTimer)); };
             }, [activeUser]);
 
             useEffect(() => {
                 document.documentElement.classList.toggle('dark', theme === 'dark');
                 localStorage.setItem('qc_theme', theme);
-                localStorage.setItem('qc_hidden_cols_v15', JSON.stringify(hiddenCols));
-                localStorage.setItem('qc_table_font', fontSize);
-            }, [theme, hiddenCols, fontSize]);
+            }, [theme]);
 
             useEffect(() => {
                 if(!dbInst) return;
@@ -446,26 +344,23 @@
             };
 
             const handleSave = async () => {
+                if(!dbInst) return;
                 setIsProcessing(true);
                 const coll = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks");
                 const data = { ...currentTask, updatedAt: Date.now(), updatedBy: activeUser };
                 try {
                     if (isEditing) {
-                        const { id, ...rest } = data;
-                        const oldData = tasks.find(t => t.id === id) || {};
-                        const details = getChangesDetail(oldData, data);
-                        await coll.doc(id).update(rest);
-                        logActivity("Revised", "Ref: " + (oldData.refNo || data.refNo || "Unknown"), activeUser, details);
+                        const { id, ...rest } = data; const oldData = tasks.find(t => t.id === id) || {}; const details = getChangesDetail(oldData, data);
+                        await coll.doc(id).update(rest); logActivity("Revised", "Ref: " + (oldData.refNo || data.refNo || "Unknown"), activeUser, details);
                     } else {
-                        data.createdAt = Date.now();
-                        await coll.add(data);
-                        logActivity("Created", "Ref: " + (data.refNo || "Unknown"), activeUser, "Initiated new project.");
+                        data.createdAt = Date.now(); await coll.add(data); logActivity("Created", "Ref: " + (data.refNo || "Unknown"), activeUser, "Initiated new project.");
                     }
                     setIsModalOpen(false);
                 } finally { setIsProcessing(false); }
             };
 
             const saveInline = async () => {
+                if(!dbInst) return;
                 setIsProcessing(true);
                 const batch = dbInst.batch();
                 const coll = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks");
@@ -475,140 +370,101 @@
                     const newData = { ...oldData, ...pendingEdits[id], updatedAt: Date.now(), updatedBy: activeUser };
                     const details = getChangesDetail(oldData, newData);
                     batch.update(coll.doc(id), newData);
-                    
                     if (details) {
                         const logRef = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_activity").doc();
                         batch.set(logRef, { action: "Quick Edited", target: "Ref: " + (oldData.refNo || newData.refNo || id), user: activeUser, details, timestamp: Date.now() });
                     }
                 });
-                await batch.commit();
-                setPendingEdits({}); setIsProcessing(false);
+                await batch.commit(); setPendingEdits({}); setIsProcessing(false);
             };
 
             const handleExportCSV = () => {
                 const headers = initialColumns.filter(c => !hiddenCols.includes(c.id)).map(c => c.label).join(',');
-                const rows = filteredAndSortedTasks.map(t => {
-                    return initialColumns.filter(c => !hiddenCols.includes(c.id)).map(c => {
-                        const val = String(t[c.id] || '').replace(/,/g, ' ').replace(/\n/g, ' ').replace(/\r/g, '');
-                        return `"${val}"`;
-                    }).join(',');
-                }).join('\n');
+                const rows = filteredAndSortedTasks.map(t => initialColumns.filter(c => !hiddenCols.includes(c.id)).map(c => `"${String(t[c.id] || '').replace(/,/g, ' ').replace(/\n/g, ' ')}"`).join(',')).join('\n');
                 const blob = new Blob(['\uFEFF' + headers + '\n' + rows], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `QC_Tracking_Export_${new Date().toISOString().split('T')[0]}.csv`;
-                link.click();
+                const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `QC_Tracking_Export_${new Date().toISOString().split('T')[0]}.csv`; link.click();
             };
 
             const toggleColVisibility = (id) => {
-                setHiddenCols(p => {
-                    const newHidden = p.includes(id) ? p.filter(c => c !== id) : [...p, id];
-                    localStorage.setItem('qc_hidden_cols_v15', JSON.stringify(newHidden));
-                    return newHidden;
+                setHiddenCols(prev => {
+                    let updated = prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id];
+                    safeStorageSet('qc_hidden_cols_v16', updated);
+                    syncUserSettings({ hiddenCols: updated });
+                    return [...updated]; 
                 });
             };
-            const visibleColOrder = colOrder.filter(id => !hiddenCols.includes(id));
+
+            const visibleCount = useMemo(() => colOrder.filter(id => !hiddenCols.includes(id)).length, [colOrder, hiddenCols]);
 
             const attachResizer = (e, colId) => {
                 e.preventDefault(); e.stopPropagation();
-                const th = e.target.closest('th');
-                const startX = e.pageX;
-                const startWidth = th.getBoundingClientRect().width;
-                const onMouseMove = (m) => {
-                    const newWidth = Math.max(60, startWidth + (m.pageX - startX));
-                    th.style.width = `${newWidth}px`; th.style.minWidth = `${newWidth}px`;
-                };
+                const th = e.target.closest('th'); const startX = e.pageX; const startWidth = th.getBoundingClientRect().width;
+                const onMouseMove = (m) => { const newWidth = Math.max(60, startWidth + (m.pageX - startX)); th.style.width = `${newWidth}px`; th.style.minWidth = `${newWidth}px`; };
                 const onMouseUp = () => {
                     const fw = th.getBoundingClientRect().width;
-                    setColWidths(p => { const u = {...p, [colId]: fw}; localStorage.setItem('qc_col_widths_v15', JSON.stringify(u)); return u; });
+                    setColWidths(p => { const u = {...p, [colId]: fw}; safeStorageSet('qc_col_widths_v16', u); syncUserSettings({ colWidths: u }); return u; });
                     document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
                     th.style.width = ''; th.style.minWidth = ''; 
                 };
                 document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
             };
 
-            const isDateEmpty = (val) => {
-                if (!val) return true;
-                const s = String(val).trim().toLowerCase();
-                return s === '' || s === '-' || s === 'n/a' || s === 'tbd' || s === 'none' || s === 'null' || s === 'undefined';
-            };
+            const isDateEmpty = (val) => { if (!val) return true; const s = String(val).trim().toLowerCase(); return s === '' || s === '-' || s === 'n/a' || s === 'tbd' || s === 'none' || s === 'null' || s === 'undefined'; };
+            const getMonth = (date) => { if (!date || typeof date !== 'string' || date.length < 7) return ''; return date.substring(5,7); };
 
             const filteredAndSortedTasks = useMemo(() => {
                 const today = new Date().toISOString().split('T')[0];
                 let res = tasks.filter(t => {
                     const mS = searchTerm === '' || Object.values(t).some(v => String(v).toLowerCase().includes(searchTerm.toLowerCase()));
-                    const mY = filterYears.length === 0 || filterYears.includes(String(t.year));
-                    const mO = filterOwners.length === 0 || filterOwners.includes(t.owner);
-                    const mST = filterStatuses.length === 0 || filterStatuses.includes(t.status);
-                    const mT = filterTypes.length === 0 || filterTypes.includes(t.type);
-                    
-                    const isO = t.status?.toLowerCase() !== 'completed' && t.dueTarget && t.dueTarget < today;
-                    const mOvr = !filterOverdue || isO;
-                    const mDue = !excludeEmptyDue || !isDateEmpty(t.dueTarget); 
-                    
-                    const tMo = filterMonths.length === 0 || 
-                        (t.dueTarget && filterMonths.includes(t.dueTarget.substring(5,7))) || 
-                        (t.completedDate && filterMonths.includes(t.completedDate.substring(5,7))) || 
-                        (t.inputDate && filterMonths.includes(t.inputDate.substring(5,7)));
-
+                    const mY = filterYears.length === 0 || filterYears.includes(String(t.year || '').trim());
+                    const mO = filterOwners.length === 0 || filterOwners.includes(String(t.owner || '').trim());
+                    const mST = filterStatuses.length === 0 || filterStatuses.includes(String(t.status || '').trim());
+                    const mT = filterTypes.length === 0 || filterTypes.includes(String(t.type || '').trim());
+                    const isO = String(t.status || '').toLowerCase() !== 'completed' && t.dueTarget && t.dueTarget < today;
+                    const mOvr = !filterOverdue || isO; const mDue = !excludeEmptyDue || !isDateEmpty(t.dueTarget); 
+                    const tMo = filterMonths.length === 0 || (t.dueTarget && filterMonths.includes(getMonth(t.dueTarget))) || (t.completedDate && filterMonths.includes(getMonth(t.completedDate))) || (t.inputDate && filterMonths.includes(getMonth(t.inputDate)));
                     return mS && mY && mO && mST && mT && mOvr && tMo && mDue;
                 });
-                
                 if (sortConfig.key) {
                     res.sort((a,b) => {
-                        const vA = a[sortConfig.key] || ''; const vB = b[sortConfig.key] || '';
-                        if (vA < vB) return sortConfig.direction === 'asc' ? -1 : 1;
-                        if (vA > vB) return sortConfig.direction === 'asc' ? 1 : -1;
-                        return 0;
+                        const vA = String(a[sortConfig.key] || ''); const vB = String(b[sortConfig.key] || '');
+                        if (vA < vB) return sortConfig.direction === 'asc' ? -1 : 1; if (vA > vB) return sortConfig.direction === 'asc' ? 1 : -1; return 0;
                     });
                 }
                 return res;
             }, [tasks, searchTerm, filterYears, filterMonths, filterOwners, filterStatuses, filterTypes, filterOverdue, excludeEmptyDue, sortConfig]);
 
-            const uniqueYears = useMemo(() => [...new Set(tasks.map(t => t.year))].filter(Boolean).sort(), [tasks]);
-            const uniqueOwners = useMemo(() => [...new Set(tasks.map(t => t.owner))].filter(Boolean).sort(), [tasks]);
-            const uniqueStatuses = useMemo(() => [...new Set(tasks.map(t => t.status))].filter(Boolean).sort(), [tasks]);
-            const uniqueTypes = useMemo(() => [...new Set(tasks.map(t => t.type))].filter(Boolean).sort(), [tasks]);
+            const uniqueYears = useMemo(() => [...new Set(tasks.map(t => String(t.year || '').trim()))].filter(Boolean).sort(), [tasks]);
+            const uniqueOwners = useMemo(() => [...new Set(tasks.map(t => String(t.owner || '').trim()))].filter(Boolean).sort(), [tasks]);
+            const uniqueStatuses = useMemo(() => [...new Set(tasks.map(t => String(t.status || '').trim()))].filter(Boolean).sort(), [tasks]);
+            const uniqueTypes = useMemo(() => [...new Set(tasks.map(t => String(t.type || '').trim()))].filter(Boolean).sort(), [tasks]);
             const monthList = [{v:'01',n:'Jan'}, {v:'02',n:'Feb'}, {v:'03',n:'Mar'}, {v:'04',n:'Apr'}, {v:'05',n:'May'}, {v:'06',n:'Jun'}, {v:'07',n:'Jul'}, {v:'08',n:'Aug'}, {v:'09',n:'Sep'}, {v:'10',n:'Oct'}, {v:'11',n:'Nov'}, {v:'12',n:'Dec'}];
-
-            const existingRefNos = useMemo(() => new Set(tasks.map(t => t.refNo).filter(Boolean)), [tasks]);
+            const existingRefNos = useMemo(() => new Set(tasks.map(t => String(t.refNo || '').trim()).filter(Boolean)), [tasks]);
             const overlappingCount = importPreview ? importPreview.filter(r => r.refNo && existingRefNos.has(r.refNo)).length : 0;
 
-            // Helper สร้างปุ่ม Multi-select Dropdown
             const renderFilterDropdown = (id, label, options, selectedArr, setArr, icon = null) => {
                 const isOpen = activeDropdown === id;
-                const toggle = (val) => {
-                    if (selectedArr.includes(val)) setArr(selectedArr.filter(v => v !== val));
-                    else setArr([...selectedArr, val]);
-                };
+                const toggle = (val) => { const strVal = String(val).trim(); if (selectedArr.includes(strVal)) setArr(selectedArr.filter(v => v !== strVal)); else setArr([...selectedArr, strVal]); };
                 const displayLabel = selectedArr.length === 0 ? `${label}: All` : `${label}: ${selectedArr.length}`;
-                const isActive = selectedArr.length > 0;
-
                 return (
-                    <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
-                        <button 
-                            onClick={() => setActiveDropdown(isOpen ? null : id)} 
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] md:text-[11px] font-bold outline-none transition-all ${isActive ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400' : 'bg-white dark:bg-slate-800 border-transparent dark:border-slate-700 text-slate-700 dark:text-white hover:border-slate-300'}`}
-                        >
-                            {icon}
-                            {displayLabel}
-                        </button>
+                    <div className="relative shrink-0">
+                        {/* 🟢 ย้าย stopPropagation มาไว้ที่ปุ่มเปิดเมนู ไม่บล็อก Element อื่นๆ */}
+                        <button onClick={(e) => { e.stopPropagation(); setActiveDropdown(isOpen ? null : id); }} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] md:text-[11px] font-bold outline-none transition-all ${selectedArr.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400' : 'bg-white dark:bg-slate-800 border-transparent dark:border-slate-700 text-slate-700 dark:text-white hover:border-slate-300'}`}>{icon}{displayLabel}</button>
                         {isOpen && (
-                            <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl p-3 z-50 animate-in fade-in">
+                            <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl p-3 z-50 animate-in fade-in" onClick={e => e.stopPropagation()}>
                                 <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                                     {options.map(opt => {
-                                        const val = typeof opt === 'object' ? opt.v : opt;
-                                        const name = typeof opt === 'object' ? opt.n : opt;
-                                        const checked = selectedArr.includes(String(val));
+                                        const val = typeof opt === 'object' ? opt.v : opt; const name = typeof opt === 'object' ? opt.n : opt;
                                         return (
-                                            <label key={val} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer" onClick={e => e.stopPropagation()}>
-                                                <input type="checkbox" checked={checked} onChange={() => toggle(String(val))} className="w-4 h-4 rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500" />
+                                            <label key={val} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer">
+                                                {/* 🟢 เปลี่ยนเป็น Checkbox ธรรมชาติ 100% ไม่มี onClick แฝง */}
+                                                <input type="checkbox" checked={selectedArr.includes(String(val).trim())} onChange={() => toggle(val)} className="w-4 h-4 rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500 cursor-pointer" />
                                                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{name}</span>
                                             </label>
                                         );
                                     })}
                                 </div>
-                                {isActive && <button onClick={() => setArr([])} className="w-full mt-2 pt-2 border-t dark:border-slate-700 text-[10px] text-rose-500 hover:text-rose-600 font-bold text-center uppercase tracking-widest transition-colors">Clear All</button>}
+                                {selectedArr.length > 0 && <button onClick={() => setArr([])} className="w-full mt-2 pt-2 border-t dark:border-slate-700 text-[10px] text-rose-500 hover:text-rose-600 font-bold text-center uppercase tracking-widest transition-colors">Clear All</button>}
                             </div>
                         )}
                     </div>
@@ -628,9 +484,7 @@
                             <h2 className="text-xl md:text-2xl font-black dark:text-white text-center mb-8 md:mb-10 uppercase tracking-widest tracking-tighter">Verify PIN</h2>
                             <form onSubmit={e => { 
                                 e.preventDefault(); 
-                                if(USER_PINS[pinInput]) { 
-                                    setActiveUser(USER_PINS[pinInput]); sessionStorage.setItem('qc_active_user', USER_PINS[pinInput]); setPinError('');
-                                } else { setPinError('รหัส PIN ไม่ถูกต้อง!'); } 
+                                if(USER_PINS[pinInput]) { setActiveUser(USER_PINS[pinInput]); sessionStorage.setItem('qc_active_user', USER_PINS[pinInput]); setPinError(''); } else { setPinError('รหัส PIN ไม่ถูกต้อง!'); } 
                             }} className="space-y-6 md:space-y-8">
                                 <input type="password" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(''); }} placeholder="• • • •" className="w-full text-center text-4xl md:text-6xl tracking-widest py-6 md:py-8 rounded-[1.5rem] md:rounded-[2rem] dark:bg-slate-900 border-0 focus:ring-4 focus:ring-blue-500/20 outline-none dark:text-white shadow-inner bg-slate-50 transition-all" maxLength={4} autoFocus />
                                 {pinError && <p className="text-rose-500 text-center font-bold text-xs md:text-sm animate-pulse">{pinError}</p>}
@@ -681,24 +535,23 @@
                                             const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
                                             const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
                                             setImportPreview(json.map(x => ({
-                                                year: x['Year'] || '', refNo: x['Ref No.'] || '', type: x['Type'] || '', 
-                                                description: x['Description'] || '', assignment: x['Assignment'] || '', 
-                                                dueTarget: x['Due/Target'] || '', completedDate: x['Completed date'] || '', 
-                                                owner: x['Owner'] || '', status: x['Status'] || 'Pending', 
-                                                remark: x['Remark'] || '', noOfDocument: parseInt(x['No.of Document']) || parseInt(x['noOfDocument']) || 0
+                                                year: String(x['Year'] || '').trim(), refNo: String(x['Ref No.'] || '').trim(), type: String(x['Type'] || '').trim(), 
+                                                description: String(x['Description'] || '').trim(), assignment: String(x['Assignment'] || '').trim(), dueTarget: String(x['Due/Target'] || '').trim(), 
+                                                completedDate: String(x['Completed date'] || '').trim(), owner: String(x['Owner'] || '').trim(), status: String(x['Status'] || 'Pending').trim(), 
+                                                remark: String(x['Remark'] || '').trim(), noOfDocument: parseInt(x['No.of Document']) || parseInt(x['noOfDocument']) || 0
                                             })));
                                         };
                                     }} />
                                 </div>
                             </div>
 
-                            <div className="flex flex-nowrap md:flex-wrap items-center gap-2 md:gap-3 pt-3 border-t dark:border-slate-800 transition-colors overflow-x-auto hide-scroll pb-2">
+                            {/* 🟢 แก้ไข: เปลี่ยนจาก overflow-x-auto เป็น flex-wrap และใส่ relative z-50 เพื่อไม่ให้กล่อง Dropdown โดนตัดขอบทิ้ง */}
+                            <div className="relative z-50 flex flex-wrap items-center gap-2 md:gap-3 pt-3 border-t dark:border-slate-800 transition-colors pb-2">
                                 <div className="relative group shrink-0">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none"><Icons.Search /></div>
                                     <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="bg-slate-50 dark:bg-slate-900 py-2 pl-9 pr-4 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 w-36 md:w-48 dark:text-white transition-all border dark:border-slate-700" />
                                 </div>
                                 
-                                {/* ✅ Multi-Select Filters ทั้งหมดเปลี่ยนเป็น Checkbox Dropdown แล้ว! */}
                                 {renderFilterDropdown('year', 'Years', uniqueYears, filterYears, setFilterYears, <Icons.Calendar />)}
                                 {renderFilterDropdown('month', 'Months', monthList, filterMonths, setFilterMonths)}
                                 {renderFilterDropdown('owner', 'Owners', uniqueOwners, filterOwners, setFilterOwners)}
@@ -716,25 +569,25 @@
                                 )}
                                 
                                 <div className="ml-auto hidden md:flex items-center gap-2 shrink-0">
-                                    <select value={fontSize} onChange={e => setFontSize(e.target.value)} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2 text-[11px] font-bold outline-none dark:text-white">
+                                    <select value={fontSize} onChange={e => { const v = e.target.value; setFontSize(v); localStorage.setItem('qc_table_font', v); syncUserSettings({ fontSize: v }); }} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-3 py-2 text-[11px] font-bold outline-none dark:text-white">
                                         <option value="text-[10px]">Font: Small</option><option value="text-xs">Font: Medium</option><option value="text-sm">Font: Large</option>
                                     </select>
                                     
-                                    {/* ✅ ระบบจัดการคอลัมน์ใหม่ คลิกติด 100% พร้อม Reset ปุ่ม */}
-                                    <div className="relative" onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => setActiveDropdown(activeDropdown === 'columns' ? null : 'columns')} className="flex items-center gap-2 px-4 py-2 rounded-xl text-slate-500 bg-white dark:bg-slate-800 border dark:border-slate-700 text-[11px] font-black tracking-widest"><Icons.View /> COLUMNS ({visibleColOrder.length}/{initialColumns.length})</button>
+                                    <div className="relative">
+                                        <button onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'columns' ? null : 'columns'); }} className="flex items-center gap-2 px-4 py-2 rounded-xl text-slate-500 bg-white dark:bg-slate-800 border dark:border-slate-700 text-[11px] font-black tracking-widest"><Icons.View /> COLUMNS ({visibleCount}/{initialColumns.length})</button>
                                         {activeDropdown === 'columns' && (
-                                            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-2xl p-4 z-50 animate-in fade-in">
+                                            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-2xl p-4 z-50 animate-in fade-in" onClick={e => e.stopPropagation()}>
                                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 border-b dark:border-slate-700 pb-2">Toggle Visibility</p>
                                                 <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
                                                     {initialColumns.map(col => (
-                                                        <div key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleColVisibility(col.id); }}>
-                                                            <input type="checkbox" checked={!hiddenCols.includes(col.id)} readOnly className="w-4 h-4 text-blue-600 rounded pointer-events-none" />
-                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 pointer-events-none">{col.label}</span>
-                                                        </div>
+                                                        <label key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl cursor-pointer">
+                                                            {/* 🟢 อัปเกรดให้ใช้ Checkbox ธรรมชาติ ลดปัญหา OnClick บนมือถือ */}
+                                                            <input type="checkbox" checked={!hiddenCols.includes(col.id)} onChange={() => toggleColVisibility(col.id)} className="w-4 h-4 text-blue-600 rounded cursor-pointer" />
+                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{col.label}</span>
+                                                        </label>
                                                     ))}
                                                 </div>
-                                                <button onClick={() => { setHiddenCols([]); setColOrder(initialColumns.map(c=>c.id)); localStorage.removeItem('qc_hidden_cols_v15'); localStorage.removeItem('qc_col_order_v15'); }} className="w-full mt-3 pt-3 border-t dark:border-slate-700 text-[10px] text-blue-500 hover:text-blue-600 font-bold text-center uppercase tracking-widest transition-colors">Reset Default</button>
+                                                <button onClick={() => { setHiddenCols([]); setColOrder(initialColumns.map(c=>c.id)); safeStorageSet('qc_hidden_cols_v16', []); safeStorageSet('qc_col_order_v16', initialColumns.map(c=>c.id)); syncUserSettings({ hiddenCols: [], colOrder: initialColumns.map(c=>c.id) }); }} className="w-full mt-3 pt-3 border-t dark:border-slate-700 text-[10px] text-blue-500 hover:text-blue-600 font-bold text-center uppercase tracking-widest transition-colors">Reset Default</button>
                                             </div>
                                         )}
                                     </div>
@@ -756,21 +609,21 @@
                                         </div>
                                     )}
 
-                                    {/* Mobile Column Toggle */}
-                                    <div className="md:hidden flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border dark:border-slate-700">
-                                        <div className="relative w-full" onClick={e => e.stopPropagation()}>
-                                            <button onClick={() => setActiveDropdown(activeDropdown === 'columns' ? null : 'columns')} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 text-xs font-bold"><Icons.View /> Manage Columns ({visibleColOrder.length})</button>
+                                    {/* 🟢 แก้ไข: เพิ่ม relative z-50 เข้าไป เพื่อให้ Dropdown บนมือถือลอยอยู่เหนือตารางเสมอ (ไม่โดนตารางบัง) */}
+                                    <div className="md:hidden relative z-50 flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border dark:border-slate-700">
+                                        <div className="relative w-full">
+                                            <button onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'columns' ? null : 'columns'); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 text-xs font-bold"><Icons.View /> Manage Columns ({visibleCount})</button>
                                             {activeDropdown === 'columns' && (
-                                                <div className="absolute left-0 mt-2 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl p-4 z-50">
+                                                <div className="absolute left-0 mt-2 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl p-4 z-50" onClick={e => e.stopPropagation()}>
                                                     <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                                                         {initialColumns.map(col => (
-                                                            <div key={col.id} className="flex items-center gap-2 p-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleColVisibility(col.id); }}>
-                                                                <input type="checkbox" checked={!hiddenCols.includes(col.id)} readOnly className="w-4 h-4 text-blue-600 rounded pointer-events-none" />
-                                                                <span className="text-[10px] font-bold dark:text-white truncate pointer-events-none">{col.label}</span>
-                                                            </div>
+                                                            <label key={col.id} className="flex items-center gap-2 p-1 cursor-pointer">
+                                                                <input type="checkbox" checked={!hiddenCols.includes(col.id)} onChange={() => toggleColVisibility(col.id)} className="w-4 h-4 text-blue-600 rounded cursor-pointer" />
+                                                                <span className="text-[10px] font-bold dark:text-white truncate">{col.label}</span>
+                                                            </label>
                                                         ))}
                                                     </div>
-                                                    <button onClick={() => { setHiddenCols([]); setColOrder(initialColumns.map(c=>c.id)); localStorage.removeItem('qc_hidden_cols_v15'); localStorage.removeItem('qc_col_order_v15'); }} className="w-full mt-3 pt-3 border-t dark:border-slate-700 text-[10px] text-blue-500 hover:text-blue-600 font-bold text-center uppercase tracking-widest transition-colors">Reset Default</button>
+                                                    <button onClick={() => { setHiddenCols([]); setColOrder(initialColumns.map(c=>c.id)); safeStorageSet('qc_hidden_cols_v16', []); safeStorageSet('qc_col_order_v16', initialColumns.map(c=>c.id)); syncUserSettings({ hiddenCols: [], colOrder: initialColumns.map(c=>c.id) }); }} className="w-full mt-3 pt-3 border-t dark:border-slate-700 text-[10px] text-blue-500 hover:text-blue-600 font-bold text-center uppercase tracking-widest transition-colors">Reset Default</button>
                                                 </div>
                                             )}
                                         </div>
@@ -781,51 +634,67 @@
                                             <table className={`w-full text-left border-separate border-spacing-0 table-fixed transition-colors ${fontSize}`}>
                                                 <thead className="sticky top-0 z-20">
                                                     <tr className="bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-700">
-                                                        {visibleColOrder.map(colId => {
+                                                        {colOrder.map(colId => {
                                                             const col = initialColumns.find(c => c.id === colId);
+                                                            const isHidden = hiddenCols.includes(colId);
+                                                            const colW = colWidths[colId] || col.width;
                                                             return (
-                                                                <th key={colId} style={{ width: colWidths[colId] }} className="px-4 py-4 md:px-8 md:py-6 text-[9px] md:text-[10px] font-black uppercase tracking-wider md:tracking-widest text-slate-400 relative group bg-slate-50 dark:bg-slate-900" draggable onDragStart={(e) => e.dataTransfer.setData("colId", colId)} onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('column-drag-target'); }} onDragLeave={e => e.currentTarget.classList.remove('column-drag-target')} onDrop={e => { e.currentTarget.classList.remove('column-drag-target'); const sId = e.dataTransfer.getData("colId"); if(sId === colId) return; const nO = [...colOrder]; const sIdx = nO.indexOf(sId); const tIdx = nO.indexOf(colId); nO.splice(sIdx, 1); nO.splice(tIdx, 0, sId); setColOrder(nO); localStorage.setItem('qc_col_order_v15', JSON.stringify(nO)); }}>
-                                                                    <div className="flex items-center gap-1 md:gap-2 cursor-pointer hover:text-blue-500 transition-all" onClick={() => setSortConfig({ key: colId, direction: sortConfig.key === colId && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>{col.label} <Icons.Sort dir={sortConfig.key === colId ? sortConfig.direction : null} /></div>
-                                                                    <div className="resizer" onMouseDown={e => attachResizer(e, colId)} onTouchStart={e => attachResizer(e, colId)} />
+                                                                <th key={colId} 
+                                                                    className={`cell-transition relative group ${isHidden ? 'border-none' : 'px-4 py-4 md:px-8 md:py-6 text-[9px] md:text-[10px] font-black uppercase tracking-wider md:tracking-widest text-slate-400 bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-700'}`}
+                                                                    style={{ width: isHidden ? 0 : colW, minWidth: isHidden ? 0 : colW, maxWidth: isHidden ? 0 : colW, opacity: isHidden ? 0 : 1, paddingLeft: isHidden ? 0 : undefined, paddingRight: isHidden ? 0 : undefined }}
+                                                                    draggable={!isHidden} 
+                                                                    onDragStart={(e) => !isHidden && e.dataTransfer.setData("colId", colId)} 
+                                                                    onDragOver={e => { if(!isHidden) { e.preventDefault(); e.currentTarget.classList.add('column-drag-target'); } }} 
+                                                                    onDragLeave={e => !isHidden && e.currentTarget.classList.remove('column-drag-target')} 
+                                                                    onDrop={e => { 
+                                                                        if(isHidden) return;
+                                                                        e.currentTarget.classList.remove('column-drag-target'); 
+                                                                        const sId = e.dataTransfer.getData("colId"); 
+                                                                        if(sId === colId) return; 
+                                                                        const nO = [...colOrder]; const sIdx = nO.indexOf(sId); const tIdx = nO.indexOf(colId); 
+                                                                        nO.splice(sIdx, 1); nO.splice(tIdx, 0, sId); 
+                                                                        setColOrder(nO); safeStorageSet('qc_col_order_v16', nO); syncUserSettings({ colOrder: nO }); 
+                                                                    }}>
+                                                                    <div className={`transition-opacity duration-200 ${isHidden ? 'opacity-0 pointer-events-none' : 'opacity-100 flex items-center gap-1 md:gap-2 cursor-pointer hover:text-blue-500'}`} onClick={() => setSortConfig({ key: colId, direction: sortConfig.key === colId && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
+                                                                        {col.label} <Icons.Sort dir={sortConfig.key === colId ? sortConfig.direction : null} />
+                                                                    </div>
+                                                                    {!isHidden && <div className="resizer" onMouseDown={e => attachResizer(e, colId)} onTouchStart={e => attachResizer(e, colId)} />}
                                                                 </th>
                                                             );
                                                         })}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y dark:divide-slate-700/50">
-                                                    {filteredAndSortedTasks.length === 0 ? <tr><td colSpan={visibleColOrder.length}><EmptyState /></td></tr> : 
+                                                    {filteredAndSortedTasks.length === 0 ? <tr><td colSpan={initialColumns.length}><EmptyState /></td></tr> : 
                                                         filteredAndSortedTasks.map(task => {
                                                             const cD = pendingEdits[task.id] || task;
                                                             return (
                                                                 <tr key={task.id} className="hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-all group">
-                                                                    {visibleColOrder.map(colId => {
-                                                                        if (colId === 'action') return (
-                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><div className="flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setCurrentTask(task); setIsEditing(true); setIsModalOpen(true); }} className="p-2 text-blue-600 bg-white dark:bg-slate-700 md:bg-transparent hover:bg-white rounded-lg md:rounded-xl shadow-sm md:shadow-none hover:shadow-sm"><Icons.Edit /></button><button onClick={async () => { if(confirm(`Purge ${task.refNo}?`)) { await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks").doc(task.id).delete(); logActivity("Deleted", "Ref: " + (task.refNo || "Unknown"), activeUser, "Deleted permanently"); } }} className="p-2 text-rose-500 bg-white dark:bg-slate-700 md:bg-transparent hover:bg-white rounded-lg md:rounded-xl shadow-sm md:shadow-none hover:shadow-sm"><Icons.Trash /></button></div></td>
-                                                                        );
-                                                                        if (colId === 'status') return (
-                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><select value={cD.status} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, status: e.target.value}}))} className={`px-2 py-1 md:px-4 md:py-2 rounded-full font-black uppercase border-0 shadow-sm outline-none cursor-pointer tracking-wider w-full ${getStatusStyles(cD.status)} ${fontSize}`}><option value="Completed">Completed</option><option value="On progress">On progress</option><option value="Pending">Pending</option><option value="Cancelled">Cancelled</option></select></td>
-                                                                        );
-                                                                        if (colId === 'noOfDocument') return (
-                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><input type="number" min="0" value={cD[colId] || 0} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: parseInt(e.target.value) || 0}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'font-black text-blue-600 dark:text-blue-400'} ${fontSize}`} /></td>
-                                                                        );
-                                                                        if (colId.includes('Date') || colId === 'dueTarget') {
-                                                                            const hasVal = !isDateEmpty(cD[colId]);
-                                                                            return (
-                                                                                <td key={colId} className="px-4 md:px-8 py-3 md:py-5">
-                                                                                    <input 
-                                                                                        type={hasVal ? 'date' : 'text'} 
-                                                                                        onFocus={e => e.target.type = 'date'}
-                                                                                        onBlur={e => { if(!e.target.value) e.target.type = 'text'; }}
-                                                                                        placeholder="-"
-                                                                                        value={hasVal ? cD[colId] : ''} 
-                                                                                        onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} 
-                                                                                        className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} 
-                                                                                    />
-                                                                                </td>
-                                                                            );
+                                                                    {colOrder.map(colId => {
+                                                                        const isHidden = hiddenCols.includes(colId);
+                                                                        const colW = colWidths[colId] || initialColumns.find(c=>c.id===colId).width;
+                                                                        let content = null;
+                                                                        
+                                                                        if (!isHidden) {
+                                                                            if (colId === 'action') content = <div className="flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setCurrentTask(task); setIsEditing(true); setIsModalOpen(true); }} className="p-2 text-blue-600 bg-white dark:bg-slate-700 md:bg-transparent hover:bg-white rounded-lg md:rounded-xl shadow-sm md:shadow-none hover:shadow-sm"><Icons.Edit /></button><button onClick={async () => { if(!dbInst) return; if(confirm(`Purge ${task.refNo}?`)) { await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks").doc(task.id).delete(); logActivity("Deleted", "Ref: " + (task.refNo || "Unknown"), activeUser, "Deleted permanently"); } }} className="p-2 text-rose-500 bg-white dark:bg-slate-700 md:bg-transparent hover:bg-white rounded-lg md:rounded-xl shadow-sm md:shadow-none hover:shadow-sm"><Icons.Trash /></button></div>;
+                                                                            else if (colId === 'status') content = <select value={cD.status} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, status: e.target.value}}))} className={`px-2 py-1 md:px-4 md:py-2 rounded-full font-black uppercase border-0 shadow-sm outline-none cursor-pointer tracking-wider w-full ${getStatusStyles(cD.status)} ${fontSize}`}><option value="Completed">Completed</option><option value="On progress">On progress</option><option value="Pending">Pending</option><option value="Cancelled">Cancelled</option></select>;
+                                                                            else if (colId === 'noOfDocument') content = <input type="number" min="0" value={cD[colId] || 0} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: parseInt(e.target.value) || 0}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'font-black text-blue-600 dark:text-blue-400'} ${fontSize}`} />;
+                                                                            else if (colId.includes('Date') || colId === 'dueTarget') {
+                                                                                const hasVal = !isDateEmpty(cD[colId]);
+                                                                                content = <input type={hasVal ? 'date' : 'text'} onFocus={e => e.target.type = 'date'} onBlur={e => { if(!e.target.value) e.target.type = 'text'; }} placeholder="-" value={hasVal ? cD[colId] : ''} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} />;
+                                                                            } else {
+                                                                                content = <input type="text" value={cD[colId] || ''} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} />;
+                                                                            }
                                                                         }
+
                                                                         return (
-                                                                            <td key={colId} className="px-4 md:px-8 py-3 md:py-5"><input type="text" value={cD[colId] || ''} onChange={e => setPendingEdits(p => ({...p, [task.id]: {...cD, [colId]: e.target.value}}))} className={`bg-transparent border-0 focus:ring-0 w-full transition-all truncate outline-none ${pendingEdits[task.id] ? 'font-black text-amber-600 dark:text-amber-400' : 'dark:text-slate-300'} ${fontSize}`} /></td>
+                                                                            <td key={colId} 
+                                                                                className={`cell-transition border-b border-transparent ${isHidden ? 'border-none' : 'px-4 md:px-8 py-3 md:py-5'}`}
+                                                                                style={{ width: isHidden ? 0 : colW, maxWidth: isHidden ? 0 : colW, opacity: isHidden ? 0 : 1, paddingLeft: isHidden ? 0 : undefined, paddingRight: isHidden ? 0 : undefined }}>
+                                                                                <div className={`transition-opacity duration-200 ${isHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                                                                                    {content}
+                                                                                </div>
+                                                                            </td>
                                                                         );
                                                                     })}
                                                                 </tr>
@@ -930,6 +799,7 @@
                                 <div className="flex gap-3 md:gap-6 shrink-0">
                                     <button onClick={() => setImportPreview(null)} className="flex-1 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] bg-slate-100 dark:bg-slate-700 font-black uppercase text-[10px] md:text-xs text-slate-400">Abort</button>
                                     <button onClick={async () => {
+                                        if(!dbInst) return;
                                         setIsProcessing(true); const coll = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks");
                                         if (importMode === 'overwrite' && overlappingCount > 0) {
                                             const iRefs = new Set(importPreview.map(r => r.refNo).filter(Boolean));
@@ -951,8 +821,32 @@
             );
         }
 
+        class ErrorBoundary extends React.Component {
+            constructor(props) { super(props); this.state = { hasError: false, error: null, errorInfo: null }; }
+            static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            componentDidCatch(error, errorInfo) { console.error("QC Tracking Crashed:", error, errorInfo); this.setState({ errorInfo }); }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="h-dvh w-full flex flex-col items-center justify-center bg-slate-900 text-white p-6">
+                            <div className="bg-rose-500/10 border border-rose-500 p-6 md:p-10 rounded-[2rem] max-w-2xl w-full shadow-2xl">
+                                <h2 className="text-xl md:text-2xl font-black text-rose-500 mb-4 tracking-tighter">⚠️ SYSTEM CRASH DETECTED</h2>
+                                <p className="text-sm md:text-base text-slate-300 mb-6 font-medium">ระบบพบข้อผิดพลาดรุนแรง (Fatal Error) กรุณากดปุ่มเพื่อล้างแคชและเริ่มใหม่</p>
+                                <div className="bg-black/50 p-4 md:p-6 rounded-xl overflow-auto text-[10px] md:text-xs font-mono text-rose-300 max-h-48 md:max-h-64 border border-rose-500/30">
+                                    {this.state.error && this.state.error.toString()}<br/><br/>
+                                    {this.state.errorInfo && this.state.errorInfo.componentStack}
+                                </div>
+                                <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="mt-8 bg-rose-600 hover:bg-rose-700 active:scale-95 transition-all text-white px-6 py-4 rounded-xl font-black text-xs md:text-sm uppercase tracking-widest w-full shadow-lg">CLEAR CACHE & RELOAD</button>
+                            </div>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render(<ErrorBoundary><App /></ErrorBoundary>);
     </script>
 </body>
 </html>
