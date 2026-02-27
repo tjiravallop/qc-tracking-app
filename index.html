@@ -74,6 +74,33 @@
         };
         const safeStorageSet = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} };
 
+        // --- GEMINI API HELPER ---
+        const callGemini = async (prompt, systemInstruction) => {
+            const apiKey = ""; // Runtime provides API key
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] }
+            };
+            
+            const delays = [1000, 2000, 4000, 8000, 16000];
+            for (let i = 0; i <= delays.length; i++) {
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    const data = await res.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+                } catch (error) {
+                    if (i === delays.length) throw error;
+                    await new Promise(r => setTimeout(r, delays[i]));
+                }
+            }
+        };
+
         const USER_PINS = { "2098": "Thanachot J.", "0843": "Sangdao T.", "2149": "Vinit R.", "9999": "Admin" };
         const emptyForm = { year: '', inputDate: '', refNo: '', type: '', description: '', assignment: '', documentRevised: '', effectiveDate: '', dueTarget: '', completedDate: '', owner: '', status: 'On progress', remark: '', noOfDocument: 0 };
         
@@ -109,12 +136,15 @@
             X: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>,
             View: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
             Calendar: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+            Chat: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>,
+            Send: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>,
             Sort: ({ dir }) => (
                 <div className="flex flex-col ml-1 opacity-50 group-hover:opacity-100">
                     <svg width="8" height="8" viewBox="0 0 24 24" fill={dir === 'asc' ? '#3b82f6' : 'currentColor'}><path d="m12 4 8 8H4z"/></svg>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill={dir === 'desc' ? '#3b82f6' : 'currentColor'}><path d="m12 20 8-8H4z"/></svg>
                 </div>
-            )
+            ),
+            Sparkles: () => <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
         };
 
         const getStatusStyles = (s) => {
@@ -209,6 +239,26 @@
                 return { monthKeys: mKeys, labels: lbls, chart1Data: { labels: lbls, datasets: c1Datasets }, chart2Data: { labels: lbls, datasets: [{ label: 'Total Ref No. Counts', backgroundColor: '#8b5cf6', data: c2Data, borderRadius: 6 }] } };
             }, [tasks]);
 
+            // AI Dashboard Summary
+            const [aiSummary, setAiSummary] = useState(null);
+            const [isAiLoading, setIsAiLoading] = useState(false);
+
+            const generateInsight = async () => {
+                setIsAiLoading(true);
+                try {
+                    const pendingCount = tasks.filter(t => t.status === 'Pending').length;
+                    const progressCount = tasks.filter(t => t.status === 'On progress').length;
+                    const completedCount = tasks.filter(t => t.status === 'Completed').length;
+                    
+                    const prompt = `ข้อมูลงาน QC ปัจจุบัน: สำเร็จ ${completedCount} งาน, กำลังทำ ${progressCount} งาน, รอดำเนินการ ${pendingCount} งาน, งานที่เลยกำหนด ${stats.overdueTasks} งาน. ช่วยวิเคราะห์ภาพรวมโปรเจกต์ ระบุความเสี่ยง และแนะนำสิ่งที่ควรโฟกัสสั้นๆ เป็นภาษาไทย 3-4 ประโยค`;
+                    const text = await callGemini(prompt, "You are an expert QC Project Analyst. Provide professional, concise insights. Use markdown if necessary.");
+                    setAiSummary(text);
+                } catch (err) {
+                    setAiSummary("เกิดข้อผิดพลาดในการดึงข้อมูลจาก AI: " + err.message);
+                }
+                setIsAiLoading(false);
+            };
+
             return (
                 <div className="space-y-6 md:space-y-8 h-full overflow-y-auto custom-scrollbar pb-24 md:pb-10 px-2 md:px-4 fade-up">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
@@ -219,6 +269,29 @@
                             </div>
                         ))}
                     </div>
+
+                    {/* Gemini AI Executive Summary Box */}
+                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 p-6 md:p-8 rounded-[2rem] border border-indigo-100 dark:border-indigo-800/30 relative overflow-hidden group">
+                        <div className="absolute -right-10 -top-10 text-indigo-500/10 dark:text-indigo-400/5 rotate-12 transition-transform group-hover:rotate-45 duration-700">
+                            <Icons.Sparkles />
+                        </div>
+                        <div className="relative z-10 flex flex-col md:flex-row gap-4 md:items-center justify-between">
+                            <div>
+                                <h3 className="font-black text-indigo-800 dark:text-indigo-300 text-sm md:text-base flex items-center gap-2 mb-2"><Icons.Sparkles /> AI Executive Summary</h3>
+                                <p className="text-xs text-indigo-600 dark:text-indigo-400 max-w-2xl font-medium leading-relaxed">
+                                    {aiSummary || "ประมวลผลสถานะโครงการทั้งหมดของคุณเพื่อค้นหาคอขวดของงาน ความเสี่ยง และข้อเสนอแนะแบบเรียลไทม์"}
+                                </p>
+                            </div>
+                            <button 
+                                onClick={generateInsight} 
+                                disabled={isAiLoading}
+                                className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20 text-xs md:text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                            >
+                                {isAiLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin rounded-full"></div> : "✨ Generate Report"}
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 gap-6 md:gap-8">
                         <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-soft border dark:border-slate-700 h-[400px] md:h-[450px] flex flex-col transition-colors">
                             <h4 className="font-black text-[12px] md:text-sm uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-4 md:mb-6 flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500"></span> No. of Document By Month (Separated by Status)</h4>
@@ -267,6 +340,14 @@
             const [showMobileProfile, setShowMobileProfile] = useState(false);
             const [activeDropdown, setActiveDropdown] = useState(null); 
 
+            // Chat States
+            const [isChatOpen, setIsChatOpen] = useState(false);
+            const [chatMessages, setChatMessages] = useState([]);
+            const [chatInput, setChatInput] = useState('');
+            const [unreadMsg, setUnreadMsg] = useState(false);
+            const [isAiTyping, setIsAiTyping] = useState(false); // Typing Indicator for AI
+            const chatEndRef = useRef(null);
+
             const [searchTerm, setSearchTerm] = useState('');
             const [filterYears, setFilterYears] = useState([]);
             const [filterMonths, setFilterMonths] = useState([]);
@@ -280,6 +361,7 @@
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [currentTask, setCurrentTask] = useState(emptyForm);
             const [isEditing, setIsEditing] = useState(false);
+            const [isAiDrafting, setIsAiDrafting] = useState(false); // Task Modal AI State
             
             const [colOrder, setColOrder] = useState(() => { const saved = safeStorageGet('qc_col_order_v16', null); return (Array.isArray(saved) && saved.length === initialColumns.length) ? saved : initialColumns.map(c => c.id); });
             const [colWidths, setColWidths] = useState(() => { const saved = safeStorageGet('qc_col_widths_v16', null); return (saved && typeof saved === 'object') ? saved : initialColumns.reduce((a, c) => ({...a, [c.id]: c.width}), {}); });
@@ -328,19 +410,92 @@
                 localStorage.setItem('qc_theme', theme);
             }, [theme]);
 
+            // Database Listeners
             useEffect(() => {
                 if(!dbInst) return;
                 authInst.onAuthStateChanged(u => { if(!u) authInst.signInAnonymously(); });
+                
                 const unsubTasks = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_tasks")
                     .onSnapshot(snap => { setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); });
+                    
                 const unsubLogs = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_activity")
                     .orderBy('timestamp', 'desc').limit(50).onSnapshot(snap => setLogs(snap.docs.map(d => d.data())));
-                return () => { unsubTasks(); unsubLogs(); }
-            }, []);
+
+                const unsubChat = dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_chat")
+                    .orderBy('timestamp', 'asc').limitToLast(100)
+                    .onSnapshot(snap => {
+                        const messages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        setChatMessages(messages);
+                        
+                        if (messages.length > 0) {
+                            const lastMsg = messages[messages.length - 1];
+                            if (lastMsg.user !== activeUser && !isChatOpen) {
+                                setUnreadMsg(true);
+                            }
+                        }
+                    });
+
+                return () => { unsubTasks(); unsubLogs(); unsubChat(); }
+            }, [activeUser, isChatOpen]);
+
+            // Auto-scroll Chat
+            useEffect(() => {
+                if (isChatOpen && chatEndRef.current) {
+                    chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                    setUnreadMsg(false);
+                }
+            }, [chatMessages, isChatOpen, isAiTyping]);
 
             const logActivity = async (action, target, user, details = "") => {
                 if(!dbInst) return;
                 try { await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_activity").add({ action, target, user, details, timestamp: Date.now() }); } catch(e){}
+            };
+
+            const handleSendMessage = async (e) => {
+                e.preventDefault();
+                if (!chatInput.trim() || !dbInst) return;
+                const text = chatInput.trim();
+                setChatInput('');
+
+                // 1. Save normal message
+                await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_chat").add({
+                    text,
+                    user: activeUser,
+                    timestamp: Date.now()
+                });
+
+                // 2. Intercept @ai keyword
+                if (text.toLowerCase().includes('@ai')) {
+                    setIsAiTyping(true);
+                    try {
+                        const activeTasks = tasks.length;
+                        const completed = tasks.filter(t => t.status === 'Completed').length;
+                        const aiPrompt = `ข้อมูล: โครงการทั้งหมด ${activeTasks} งาน, สำเร็จแล้ว ${completed} งาน. คำถามผู้ใช้: "${text.replace(/@ai/gi, '').trim()}"`;
+                        
+                        const aiResponse = await callGemini(aiPrompt, "You are a helpful QC AI Assistant working in the chat. Reply in Thai, be concise, helpful, and friendly.");
+                        
+                        await dbInst.collection("artifacts").doc(currentAppId).collection("public").doc("data").collection("qc_chat").add({
+                            text: aiResponse, 
+                            user: "✨ AI Assistant", 
+                            timestamp: Date.now()
+                        });
+                    } catch(err) {
+                        console.error("AI Error:", err);
+                    } finally {
+                        setIsAiTyping(false);
+                    }
+                }
+            };
+
+            // AI Task Drafter
+            const handleAiDraft = async () => {
+                setIsAiDrafting(true);
+                try {
+                    const prompt = `ช่วยเขียนคำอธิบายรายละเอียดงาน (Scope Description) แบบมืออาชีพ 1-2 ประโยค สำหรับงาน QC ประเภท '${currentTask.type || 'ตรวจสอบคุณภาพทั่วไป'}' รหัสอ้างอิง '${currentTask.refNo || '-'}'`;
+                    const text = await callGemini(prompt, "You are a helpful QC Management assistant. Reply only with the drafted description in Thai. Avoid markdown asterisks.");
+                    setCurrentTask({...currentTask, description: text.trim().replace(/^"|"$/g, '')});
+                } catch(e) { console.error("Drafting error", e); }
+                setIsAiDrafting(false);
             };
 
             const handleSave = async () => {
@@ -448,7 +603,6 @@
                 const displayLabel = selectedArr.length === 0 ? `${label}: All` : `${label}: ${selectedArr.length}`;
                 return (
                     <div className="relative shrink-0">
-                        {/* 🟢 ย้าย stopPropagation มาไว้ที่ปุ่มเปิดเมนู ไม่บล็อก Element อื่นๆ */}
                         <button onClick={(e) => { e.stopPropagation(); setActiveDropdown(isOpen ? null : id); }} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] md:text-[11px] font-bold outline-none transition-all ${selectedArr.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400' : 'bg-white dark:bg-slate-800 border-transparent dark:border-slate-700 text-slate-700 dark:text-white hover:border-slate-300'}`}>{icon}{displayLabel}</button>
                         {isOpen && (
                             <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl p-3 z-50 animate-in fade-in" onClick={e => e.stopPropagation()}>
@@ -457,7 +611,6 @@
                                         const val = typeof opt === 'object' ? opt.v : opt; const name = typeof opt === 'object' ? opt.n : opt;
                                         return (
                                             <label key={val} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer">
-                                                {/* 🟢 เปลี่ยนเป็น Checkbox ธรรมชาติ 100% ไม่มี onClick แฝง */}
                                                 <input type="checkbox" checked={selectedArr.includes(String(val).trim())} onChange={() => toggle(val)} className="w-4 h-4 rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500 cursor-pointer" />
                                                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{name}</span>
                                             </label>
@@ -545,8 +698,7 @@
                                 </div>
                             </div>
 
-                            {/* 🟢 แก้ไข: เปลี่ยนจาก overflow-x-auto เป็น flex-wrap และใส่ relative z-50 เพื่อไม่ให้กล่อง Dropdown โดนตัดขอบทิ้ง */}
-                            <div className="relative z-50 flex flex-wrap items-center gap-2 md:gap-3 pt-3 border-t dark:border-slate-800 transition-colors pb-2">
+                            <div className="relative z-40 flex flex-wrap items-center gap-2 md:gap-3 pt-3 border-t dark:border-slate-800 transition-colors pb-2">
                                 <div className="relative group shrink-0">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none"><Icons.Search /></div>
                                     <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="bg-slate-50 dark:bg-slate-900 py-2 pl-9 pr-4 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 w-36 md:w-48 dark:text-white transition-all border dark:border-slate-700" />
@@ -581,7 +733,6 @@
                                                 <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
                                                     {initialColumns.map(col => (
                                                         <label key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl cursor-pointer">
-                                                            {/* 🟢 อัปเกรดให้ใช้ Checkbox ธรรมชาติ ลดปัญหา OnClick บนมือถือ */}
                                                             <input type="checkbox" checked={!hiddenCols.includes(col.id)} onChange={() => toggleColVisibility(col.id)} className="w-4 h-4 text-blue-600 rounded cursor-pointer" />
                                                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{col.label}</span>
                                                         </label>
@@ -609,8 +760,7 @@
                                         </div>
                                     )}
 
-                                    {/* 🟢 แก้ไข: เพิ่ม relative z-50 เข้าไป เพื่อให้ Dropdown บนมือถือลอยอยู่เหนือตารางเสมอ (ไม่โดนตารางบัง) */}
-                                    <div className="md:hidden relative z-50 flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border dark:border-slate-700">
+                                    <div className="md:hidden relative z-40 flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border dark:border-slate-700">
                                         <div className="relative w-full">
                                             <button onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'columns' ? null : 'columns'); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 text-xs font-bold"><Icons.View /> Manage Columns ({visibleCount})</button>
                                             {activeDropdown === 'columns' && (
@@ -629,7 +779,7 @@
                                         </div>
                                     </div>
 
-                                    <div className="bg-white dark:bg-slate-800 rounded-2xl md:rounded-[3rem] shadow-soft border dark:border-slate-700/50 overflow-hidden flex-1 flex flex-col relative pb-8 md:pb-0">
+                                    <div className="bg-white dark:bg-slate-800 rounded-2xl md:rounded-[3rem] shadow-soft border dark:border-slate-700/50 overflow-hidden flex-1 flex flex-col relative pb-8 md:pb-0 z-10">
                                         <div className="overflow-x-auto custom-scrollbar flex-1">
                                             <table className={`w-full text-left border-separate border-spacing-0 table-fixed transition-colors ${fontSize}`}>
                                                 <thead className="sticky top-0 z-20">
@@ -710,6 +860,101 @@
                         </div>
                     </main>
 
+                    {/* ---------- Floating Chat Feature ---------- */}
+                    <button 
+                        onClick={() => setIsChatOpen(!isChatOpen)}
+                        className="fixed bottom-24 md:bottom-8 right-4 md:right-8 w-14 h-14 bg-blue-600 text-white rounded-full shadow-[0_10px_20px_rgba(37,99,235,0.4)] flex items-center justify-center hover:bg-blue-700 active:scale-95 transition-all z-[110]"
+                    >
+                        {isChatOpen ? <Icons.X /> : <Icons.Chat />}
+                        {!isChatOpen && unreadMsg && (
+                            <span className="absolute top-0 right-0 w-4 h-4 bg-rose-500 border-2 border-white dark:border-slate-900 rounded-full animate-pulse"></span>
+                        )}
+                    </button>
+
+                    {isChatOpen && (
+                        <div className="fixed bottom-40 md:bottom-28 right-4 md:right-8 w-[calc(100vw-2rem)] md:w-96 h-[60vh] md:h-[500px] bg-white dark:bg-slate-800 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border dark:border-slate-700 flex flex-col z-[110] animate-in slide-in-from-bottom-5">
+                            {/* Chat Header */}
+                            <div className="p-4 md:p-5 border-b dark:border-slate-700 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-t-3xl flex justify-between items-center shrink-0">
+                                <div>
+                                    <h3 className="font-black text-base flex items-center gap-2 tracking-tight"><Icons.Chat /> Team Chat</h3>
+                                    <p className="text-[10px] text-blue-100 font-medium">✨ พิมพ์ @ai เพื่อถามข้อมูลโปรเจกต์</p>
+                                </div>
+                                <button onClick={() => setIsChatOpen(false)} className="hover:bg-blue-700/50 p-2 rounded-xl transition-colors"><Icons.X /></button>
+                            </div>
+                            
+                            {/* Chat Messages Area */}
+                            <div className="flex-1 p-4 md:p-5 overflow-y-auto custom-scrollbar flex flex-col gap-4 bg-slate-50/50 dark:bg-slate-900/50">
+                                {chatMessages.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-full text-center text-slate-400 gap-3">
+                                        <div className="w-16 h-16 bg-blue-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-blue-300"><Icons.Chat /></div>
+                                        <div>
+                                            <p className="font-bold text-xs uppercase tracking-widest text-slate-500">No Messages Yet</p>
+                                            <p className="text-[10px] mt-1">Be the first to say hello!</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    chatMessages.map((msg, index) => {
+                                        const isMe = msg.user === activeUser;
+                                        const isAi = msg.user === "✨ AI Assistant";
+                                        const showHeader = index === 0 || chatMessages[index - 1].user !== msg.user;
+                                        return (
+                                            <div key={msg.id} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}>
+                                                {showHeader && (
+                                                    <span className={`text-[10px] font-bold mb-1 px-1 ${isAi ? 'text-indigo-500' : 'text-slate-400'}`}>
+                                                        {isMe ? 'You' : msg.user} • {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                    </span>
+                                                )}
+                                                <div className={`px-4 py-2.5 rounded-[1.2rem] text-sm shadow-sm ${
+                                                    isMe 
+                                                    ? 'bg-blue-600 text-white rounded-tr-sm' 
+                                                    : isAi 
+                                                        ? 'bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-100 rounded-tl-sm'
+                                                        : 'bg-white dark:bg-slate-700 border dark:border-slate-600 text-slate-700 dark:text-white rounded-tl-sm'
+                                                }`}>
+                                                    {msg.text}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                                
+                                {/* AI Typing Indicator */}
+                                {isAiTyping && (
+                                    <div className="flex flex-col self-start items-start max-w-[85%] fade-up">
+                                        <span className="text-[10px] text-indigo-500 font-bold mb-1 px-1">✨ AI Assistant is typing...</span>
+                                        <div className="px-4 py-3.5 rounded-[1.2rem] shadow-sm bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-tl-sm">
+                                            <div className="flex gap-1.5 items-center">
+                                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></span>
+                                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.15s'}}></span>
+                                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.3s'}}></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={chatEndRef} />
+                            </div>
+                            
+                            {/* Chat Input */}
+                            <form onSubmit={handleSendMessage} className="p-3 md:p-4 border-t dark:border-slate-700 bg-white dark:bg-slate-800 rounded-b-3xl flex gap-2 shrink-0">
+                                <input
+                                    type="text"
+                                    value={chatInput}
+                                    onChange={e => setChatInput(e.target.value)}
+                                    placeholder="Type your message... (Try @ai)"
+                                    className="flex-1 bg-slate-100 dark:bg-slate-900 border border-transparent dark:border-slate-700 rounded-xl px-4 py-3 text-xs outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all font-medium"
+                                />
+                                <button 
+                                    type="submit" 
+                                    disabled={!chatInput.trim()} 
+                                    className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all shrink-0"
+                                >
+                                    <Icons.Send />
+                                </button>
+                            </form>
+                        </div>
+                    )}
+                    {/* ------------------------------------------- */}
+
                     <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t dark:border-slate-800 z-50 flex justify-around items-center px-2 py-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
                         {[ { id: 'dashboard', label: 'Overview', icon: <Icons.Dashboard /> }, { id: 'tasks', label: 'Projects', icon: <Icons.Tasks /> }, { id: 'activity', label: 'History', icon: <Icons.Activity /> } ].map(item => (
                             <button key={item.id} onClick={() => {setCurrentView(item.id); setShowMobileProfile(false); setActiveDropdown(null);}} className={`flex flex-col items-center gap-1 p-2 w-16 rounded-xl transition-all ${currentView === item.id && !showMobileProfile ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
@@ -751,7 +996,17 @@
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-blue-600 ml-3">No. of Document</label><input type="number" min="0" value={currentTask.noOfDocument || 0} onChange={e => setCurrentTask({...currentTask, noOfDocument: parseInt(e.target.value) || 0})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-blue-50/50 dark:bg-blue-900/20 border-2 border-blue-100 dark:border-blue-900/50 focus:ring-2 focus:ring-blue-500 font-black text-lg text-blue-600 dark:text-blue-400 outline-none shadow-inner" /></div>
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Category (Type)</label><input type="text" value={currentTask.type} onChange={e => setCurrentTask({...currentTask, type: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Fiscal Year</label><input type="text" value={currentTask.year} onChange={e => setCurrentTask({...currentTask, year: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-bold dark:text-white outline-none shadow-inner" /></div>
-                                    <div className="col-span-full space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Scope Description</label><textarea rows="2" value={currentTask.description} onChange={e => setCurrentTask({...currentTask, description: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-medium dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
+                                    
+                                    <div className="col-span-full space-y-1">
+                                        <div className="flex items-center justify-between ml-3">
+                                            <label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400">Scope Description</label>
+                                            <button onClick={handleAiDraft} disabled={isAiDrafting} className="text-[10px] md:text-xs text-indigo-500 font-black hover:text-indigo-600 flex items-center gap-1 transition-all">
+                                                {isAiDrafting ? <span className="w-3 h-3 border border-indigo-500 border-t-transparent rounded-full animate-spin"></span> : <Icons.Sparkles />} AI Draft
+                                            </button>
+                                        </div>
+                                        <textarea rows="2" value={currentTask.description} onChange={e => setCurrentTask({...currentTask, description: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-medium dark:text-white outline-none shadow-inner text-xs md:text-sm" />
+                                    </div>
+                                    
                                     <div className="col-span-full space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 ml-3">Lead Assignment</label><textarea rows="2" value={currentTask.assignment} onChange={e => setCurrentTask({...currentTask, assignment: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2.5rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-blue-500 font-medium dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-rose-500 ml-3">Target Due Date</label><input type={!isDateEmpty(currentTask.dueTarget) ? 'date' : 'text'} onFocus={e => e.target.type='date'} onBlur={e => {if(!e.target.value) e.target.type='text'}} placeholder="Not specified" value={!isDateEmpty(currentTask.dueTarget) ? currentTask.dueTarget : ''} onChange={e => setCurrentTask({...currentTask, dueTarget: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-rose-500/50 font-bold dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
                                     <div className="space-y-1"><label className="text-[9px] md:text-[10px] font-black uppercase text-emerald-500 ml-3">Completed Date</label><input type={!isDateEmpty(currentTask.completedDate) ? 'date' : 'text'} onFocus={e => e.target.type='date'} onBlur={e => {if(!e.target.value) e.target.type='text'}} placeholder="Not specified" value={!isDateEmpty(currentTask.completedDate) ? currentTask.completedDate : ''} onChange={e => setCurrentTask({...currentTask, completedDate: e.target.value})} className="w-full px-5 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-0 focus:ring-2 focus:ring-emerald-500/50 font-bold dark:text-white outline-none shadow-inner text-xs md:text-sm" /></div>
